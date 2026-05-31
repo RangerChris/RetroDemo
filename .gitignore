@@ -1,0 +1,26 @@
+# .NET build outputs
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+.vs/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+
+# Rider / VS
+.idea/
+*.DotSettings.user
+
+# macOS
+.DS_Store
+
+# Demo assets (user-supplied; not committed)
+RetroDemo/Assets/music.mp3
+RetroDemo/Assets/music.ogg
+RetroDemo/Assets/music.wav

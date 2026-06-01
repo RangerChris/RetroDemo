@@ -1,710 +1,465 @@
 using System.Numerics;
-using Raylib_cs;
-using static RetroDemo.ColorHelper;
 
 namespace RetroDemo.Scenes;
 
-/// <summary>
-/// Ten classic sine-based demo effects cycling in sequence, with a smooth
-/// text scroller running along the bottom throughout.
-/// </summary>
 public sealed class SinusScene : IScene
 {
-    private int _w;
-    private int _h;
-
-    // ── effects ───────────────────────────────────────────────────────────────
     private const int EffectCount = 10;
-    private const float EffectDuration = 5.0f;   // seconds per effect
-    private const float FadeTime = 0.6f;   // crossfade overlap
+    private const float EffectDuration = 5.0f;
 
-    private float _time = 0f;
-    private int _effectIdx = 0;
-    private float _effectTime = 0f;
+    private const int StarCount = 180;
+    private const int TrailLength = 220;
 
-    // ── low-res plasma buffer (classic 320×200 Amiga resolution) ──────────────
-    private const int LW = 320;
-    private const int LH = 200;
-    private RenderTexture2D _plasma;
+    private readonly Star[] _stars = new Star[StarCount];
+    private readonly Vector2[] _trail = new Vector2[TrailLength];
+    private readonly Random _rng = new(77);
+    private readonly float[] _labelWidths = new float[EffectCount];
 
-    // ── starfield (shared across multiple effects) ────────────────────────────
-    private readonly Star[] _stars;
-    private struct Star { public float X, Y, Z; }
-    private const int StarCount = 220;
+    private float _time;
+    private int _effectIndex;
+    private float _effectTime;
+    private int _trailHead;
 
-    // ── bobs ──────────────────────────────────────────────────────────────────
-    private const int BobCount = 12;
-    private RenderTexture2D _bobRT;
-
-    // ── lissajous trail ───────────────────────────────────────────────────────
-    private const int TrailLen = 1200;
-    private readonly Vector2[] _trail = new Vector2[TrailLen];
-    private int _trailHead = 0;
-    private float _lissT = 0f;
-
-    // ── tunnel ────────────────────────────────────────────────────────────────
-    private RenderTexture2D _tunnelRT;
-
-    // ── scroller ──────────────────────────────────────────────────────────────
-    private const string ScrollText =
-        "  *** RETRO DEMO — AMIGA 500 STYLE ***   " +
-        "CODED IN C# AND .NET 10 WITH RAYLIB   " +
-        "REPLACE THIS TEXT WITH YOUR OWN MESSAGE!   " +
-        "GREETINGS TO ALL DEMO CODERS EVERYWHERE   " +
-        "PRESS SPACE TO SKIP EFFECTS   " +
-        "*** SINUS RULES ***   ";
-
-    private float _scrollX;
-    private const int ScrollFontSize = 42;
-    private const int ScrollYBase = 0;   // offset from bottom — computed on draw
-
-    // ── camera for 3-D effects ────────────────────────────────────────────────
-    private Camera3D _cam3d = new()
+    private struct Star
     {
-        Position = new Vector3(0, 12f, 0.1f),
-        Target = Vector3.Zero,
-        Up = Vector3.UnitZ,
-        FovY = 50f,
-        Projection = CameraProjection.Perspective,
-    };
-
-    // ─────────────────────────────────────────────────────────────────────────
-    public SinusScene(int w, int h)
-    {
-        _w = w;
-        _h = h;
-
-        _plasma = Raylib.LoadRenderTexture(LW, LH);
-        _bobRT = Raylib.LoadRenderTexture(w, h);
-        _tunnelRT = Raylib.LoadRenderTexture(LW, LH);
-
-        // Initialise stars
-        var rng = new Random(77);
-        _stars = new Star[StarCount];
-        for (int i = 0; i < StarCount; i++)
-            _stars[i] = new Star
-            {
-                X = (rng.NextSingle() - 0.5f) * 2f,
-                Y = (rng.NextSingle() - 0.5f) * 2f,
-                Z = rng.NextSingle(),
-            };
-
-        // Scroll starts off-screen right
-        _scrollX = w + 20f;
+        public float X;
+        public float Y;
+        public float Z;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    public bool Update(float dt)
+    public SinusScene(int w, int h)
     {
-        EnsureRenderTargetSize();
+        _ = w;
+        _ = h;
 
-        _time += dt;
-        _effectTime += dt;
+        for (int i = 0; i < StarCount; i++)
+        {
+            _stars[i] = new Star
+            {
+                X = (_rng.NextSingle() - 0.5f) * 2f,
+                Y = (_rng.NextSingle() - 0.5f) * 2f,
+                Z = _rng.NextSingle(),
+            };
+        }
+    }
+
+    public bool Update(float deltaTime)
+    {
+        _time += deltaTime;
+        _effectTime += deltaTime;
 
         if (_effectTime >= EffectDuration)
         {
             _effectTime -= EffectDuration;
-            _effectIdx++;
-            if (_effectIdx >= EffectCount)
+            _effectIndex++;
+            if (_effectIndex >= EffectCount)
                 return true;
         }
 
-        // Advance lissajous position
-        _lissT += dt * 0.9f;
-
-        // Update scroll position
-        _scrollX -= dt * 220f;
-
-        // Measure total scroll text width so we can loop
-        int totalW = Raylib.MeasureText(ScrollText, ScrollFontSize);
-        if (_scrollX < -totalW)
-            _scrollX += totalW + _w;
-
-        // Advance stars
         for (int i = 0; i < StarCount; i++)
         {
-            _stars[i].Z -= dt * 0.6f;
+            _stars[i].Z -= deltaTime * 0.55f;
             if (_stars[i].Z <= 0f)
             {
-                var rng = new Random(i + (int)(_time * 100));
-                _stars[i] = new Star
-                {
-                    X = (rng.NextSingle() - 0.5f) * 2f,
-                    Y = (rng.NextSingle() - 0.5f) * 2f,
-                    Z = 1f,
-                };
+                _stars[i].X = (_rng.NextSingle() - 0.5f) * 2f;
+                _stars[i].Y = (_rng.NextSingle() - 0.5f) * 2f;
+                _stars[i].Z = 1f;
             }
         }
 
         return false;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    public void Draw()
+    public void Draw(Dx12Renderer renderer)
     {
-        EnsureRenderTargetSize();
-
-        float et = _effectTime;   // time within current effect
+        int w = renderer.Width;
+        int h = renderer.Height;
+        int drawH = h - 86;
+        float resolutionScale = MathF.Max(1f, MathF.Max(w / 1920f, drawH / 1080f));
         float t = _time;
 
-        // Fade between effects
-        float alpha = 1f;
-        if (et < FadeTime) alpha = et / FadeTime;
-        else if (et > EffectDuration - FadeTime)
-            alpha = (EffectDuration - et) / FadeTime;
+        float fade = 1f;
+        const float fadeTime = 0.6f;
+        if (_effectTime < fadeTime)
+            fade = _effectTime / fadeTime;
+        else if (_effectTime > EffectDuration - fadeTime)
+            fade = (EffectDuration - _effectTime) / fadeTime;
 
-        Raylib.ClearBackground(Color.Black);
-
-        switch (_effectIdx)
+        Vector4 bg = _effectIndex switch
         {
-            case 0: DrawMultiWaves(t, alpha); break;
-            case 1: DrawPlasma(t, alpha); break;
-            case 2: DrawCopperBars(t, alpha); break;
-            case 3: DrawStarfield(t, alpha); break;
-            case 4: DrawBobs(t, alpha); break;
-            case 5: DrawSineLandscape(t, alpha); break;
-            case 6: DrawLissajous(t, alpha); break;
-            case 7: DrawTunnel(t, alpha); break;
-            case 8: DrawInterference(t, alpha); break;
-            case 9: DrawDotRotator(t, alpha); break;
-            default: Raylib.ClearBackground(Color.Black); break;
+            0 => new Vector4(0.03f, 0.01f, 0.08f, 1f),
+            1 => new Vector4(0.02f, 0.02f, 0.08f, 1f),
+            2 => new Vector4(0.01f, 0.02f, 0.04f, 1f),
+            3 => new Vector4(0.0f, 0.0f, 0.03f, 1f),
+            4 => new Vector4(0.03f, 0.0f, 0.05f, 1f),
+            5 => new Vector4(0.0f, 0.03f, 0.06f, 1f),
+            6 => new Vector4(0.01f, 0.01f, 0.06f, 1f),
+            7 => new Vector4(0.0f, 0.02f, 0.06f, 1f),
+            8 => new Vector4(0.02f, 0.0f, 0.03f, 1f),
+            _ => new Vector4(0.02f, 0.01f, 0.07f, 1f),
+        };
+
+        renderer.Clear(bg);
+        renderer.BeginOverlay();
+
+        switch (_effectIndex)
+        {
+            case 0: DrawMultiWaves(renderer, w, drawH, t, fade, resolutionScale); break;
+            case 1: DrawPlasma(renderer, w, drawH, t, fade, resolutionScale); break;
+            case 2: DrawCopperBars(renderer, w, drawH, t, fade); break;
+            case 3: DrawStarfield(renderer, w, drawH, t, fade); break;
+            case 4: DrawBobs(renderer, w, drawH, t, fade); break;
+            case 5: DrawSineLandscape(renderer, w, drawH, t, fade, resolutionScale); break;
+            case 6: DrawLissajous(renderer, w, drawH, t, fade); break;
+            case 7: DrawTunnel(renderer, w, drawH, t, fade, resolutionScale); break;
+            case 8: DrawInterference(renderer, w, drawH, t, fade, resolutionScale); break;
+            case 9: DrawDotRotator(renderer, w, drawH, t, fade, resolutionScale); break;
         }
 
-        DrawScrollerBar();
-        DrawScanlines();
+        DrawScroller(renderer, w, h, t);
+        DrawLabel(renderer, w);
+        DrawScanlines(renderer, w, h, resolutionScale);
 
-        // Effect name
-        DrawEffectLabel(_effectIdx, alpha);
+        renderer.EndOverlay();
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Effect 1 — Multi-layer Sine Waves
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawMultiWaves(float t, float alpha)
+    private static void DrawMultiWaves(Dx12Renderer renderer, int w, int drawH, float t, float alpha, float resolutionScale)
     {
-        Raylib.ClearBackground(Rgba(5, 0, 20, 255));
-
-        int scrollH = ScrollFontSize + 20;
-        int drawH = _h - scrollH;
-        float cy = drawH / 2f;
-
-        // 6 waves with different params
+        float cy = drawH * 0.5f;
+        int xStep = Math.Max(6, (int)(6f * resolutionScale));
         (float freq, float amp, float speed, float hue)[] waves =
         [
-            (1.0f, 80f, 1.2f,   0f),
-            (1.5f, 55f, 0.9f,  60f),
-            (2.0f, 45f, 1.6f, 120f),
-            (2.7f, 35f, 2.1f, 180f),
-            (3.5f, 25f, 1.8f, 240f),
-            (4.2f, 18f, 2.5f, 300f),
+            (0.012f, 80f, 1.1f, 10f),
+            (0.015f, 58f, 0.9f, 65f),
+            (0.02f, 42f, 1.4f, 140f),
+            (0.026f, 32f, 1.9f, 210f),
+            (0.034f, 24f, 2.2f, 285f),
         ];
 
-        foreach (var (freq, amp, speed, baseHue) in waves)
+        foreach (var (freq, amp, speed, hue0) in waves)
         {
-            float hue = (baseHue + t * 40f) % 360f;
-            byte a = (byte)(alpha * 220);
-            var c = Raylib.ColorFromHSV(hue, 1f, 1f);
-            c = Rgba(c.R, c.G, c.B, a);
+            Vector4 c = HsvToRgb((hue0 + t * 50f) % 360f, 1f, 1f);
+            c.W = alpha * 0.9f;
 
-            for (int x = 0; x < _w - 1; x++)
+            for (int x = 0; x < w - xStep; x += xStep)
             {
-                float y1 = cy + amp * MathF.Sin(freq * x * 0.015f + t * speed);
-                float y2 = cy + amp * MathF.Sin(freq * (x + 1) * 0.015f + t * speed);
-                Raylib.DrawLineEx(new Vector2(x, y1), new Vector2(x + 1, y2), 2.5f, c);
+                float y1 = cy + amp * MathF.Sin(x * freq + t * speed);
+                float y2 = cy + amp * MathF.Sin((x + xStep) * freq + t * speed);
+                renderer.DrawLine(x, y1, x + xStep, y2, 2f, c);
             }
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Effect 2 — Classic Plasma
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawPlasma(float t, float alpha)
+    private static void DrawPlasma(Dx12Renderer renderer, int w, int drawH, float t, float alpha, float resolutionScale)
     {
-        // Render to low-res texture, then scale up for that pixel-art retro look
-        Raylib.BeginTextureMode(_plasma);
-        Raylib.ClearBackground(Color.Black);
-
-        for (int py = 0; py < LH; py++)
-            for (int px = 0; px < LW; px++)
+        int step = Math.Max(14, (int)(14f * resolutionScale));
+        for (int y = 0; y < drawH; y += step)
+        {
+            for (int x = 0; x < w; x += step)
             {
-                float v = MathF.Sin(px * 0.06f + t * 1.5f)
-                        + MathF.Sin(py * 0.05f + t * 1.2f)
-                        + MathF.Sin((px + py) * 0.04f + t)
-                        + MathF.Sin(MathF.Sqrt(px * px + py * py) * 0.07f - t * 2f);
-                float hue = ((v + 4f) / 8f * 360f + t * 60f) % 360f;
-                Raylib.DrawPixel(px, py, Raylib.ColorFromHSV(hue, 1f, 1f));
+                float v = MathF.Sin(x * 0.03f + t * 1.4f)
+                        + MathF.Sin(y * 0.035f + t * 1.2f)
+                        + MathF.Sin((x + y) * 0.02f + t);
+                float hue = ((v + 3f) / 6f * 360f + t * 60f) % 360f;
+                Vector4 c = HsvToRgb(hue, 1f, 1f);
+                c.W = alpha * 0.88f;
+                renderer.FillRect(x, y, step + 1, step + 1, c);
             }
-
-        Raylib.EndTextureMode();
-
-        // Scale to full window (Y flip for render texture)
-        int scrollH = ScrollFontSize + 20;
-        byte pa = (byte)(alpha * 255);
-        Raylib.DrawTexturePro(_plasma.Texture,
-            new Rectangle(0, 0, LW, -LH),
-            new Rectangle(0, 0, _w, _h - scrollH),
-            Vector2.Zero, 0f, Rgba(255, 255, 255, pa));
+        }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Effect 3 — Copper Bars
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawCopperBars(float t, float alpha)
+    private static void DrawCopperBars(Dx12Renderer renderer, int w, int drawH, float t, float alpha)
     {
-        Raylib.ClearBackground(Color.Black);
-
-        int scrollH = ScrollFontSize + 20;
-        int drawH = _h - scrollH;
-
-        // 8 copper-bar groups
         for (int b = 0; b < 8; b++)
         {
-            float sinPhase = t * (1.0f + b * 0.15f) + b * MathF.PI * 0.4f;
-            int barCenter = (int)(drawH / 2f + (drawH * 0.38f) * MathF.Sin(sinPhase));
-            int barHeight = 40 + (int)(20 * MathF.Abs(MathF.Sin(t * 0.7f + b)));
-            float baseHue = (b * 45f + t * 50f) % 360f;
+            float phase = t * (1f + b * 0.15f) + b * 0.8f;
+            int center = (int)(drawH * 0.5f + drawH * 0.38f * MathF.Sin(phase));
+            int barH = 28 + (int)(22 * MathF.Abs(MathF.Sin(t * 0.7f + b)));
+            float baseHue = (b * 42f + t * 55f) % 360f;
 
-            for (int row = 0; row < barHeight; row++)
+            for (int row = 0; row < barH; row++)
             {
-                int y = barCenter - barHeight / 2 + row;
-                if (y < 0 || y >= drawH) continue;
-                float f = row / (float)barHeight;
-                float hue = (baseHue + f * 90f) % 360f;
-                float bri = 0.4f + 0.6f * MathF.Sin(f * MathF.PI);
-                var c = Raylib.ColorFromHSV(hue, 1f, bri);
-                byte ca = (byte)(alpha * 255);
-                Raylib.DrawRectangle(0, y, _w, 1, Rgba(c.R, c.G, c.B, ca));
+                int y = center - barH / 2 + row;
+                if (y < 0 || y >= drawH)
+                    continue;
+
+                float f = row / (float)barH;
+                Vector4 c = HsvToRgb((baseHue + f * 90f) % 360f, 1f, 0.45f + 0.55f * MathF.Sin(f * MathF.PI));
+                c.W = alpha;
+                renderer.FillRect(0, y, w, 1, c);
             }
         }
-
-        // Centered label
-        string lbl = "COPPER BARS";
-        int lfs = 24;
-        int lw = Raylib.MeasureText(lbl, lfs);
-        byte la = (byte)(alpha * 180);
-        Raylib.DrawText(lbl, (_w - lw) / 2, drawH / 2 - lfs / 2, lfs,
-                        Rgba(255, 255, 255, la));
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Effect 4 — Starfield (perspective with sine wobble)
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawStarfield(float t, float alpha)
+    private void DrawStarfield(Dx12Renderer renderer, int w, int drawH, float t, float alpha)
     {
-        Raylib.ClearBackground(Color.Black);
-        int scrollH = ScrollFontSize + 20;
-        int drawH = _h - scrollH;
-        float cx = _w / 2f, cy = drawH / 2f;
+        float cx = w * 0.5f;
+        float cy = drawH * 0.5f;
 
-        foreach (var s in _stars)
+        foreach (Star s in _stars)
         {
-            if (s.Z <= 0f) continue;
-            float sx = (s.X / s.Z) * _w * 0.5f + cx
-                        + 12f * MathF.Sin(t * 0.8f + s.Y * 5f);
-            float sy = (s.Y / s.Z) * drawH * 0.5f + cy;
-            if (sx < 0 || sx >= _w || sy < 0 || sy >= drawH) continue;
+            if (s.Z <= 0f)
+                continue;
 
-            float brightness = 1f - s.Z;
-            float r2 = Math.Max(1f, (1f - s.Z) * 3.5f);
-            byte sb = (byte)(brightness * alpha * 255);
-            // Colour based on depth
-            float hue = (s.Z * 200f + 180f) % 360f;
-            var sc = Raylib.ColorFromHSV(hue, 0.3f + brightness * 0.7f, 1f);
-            Raylib.DrawCircleV(new Vector2(sx, sy), r2, Rgba(sc.R, sc.G, sc.B, sb));
+            float sx = (s.X / s.Z) * w * 0.46f + cx + 10f * MathF.Sin(t * 0.9f + s.Y * 4f);
+            float sy = (s.Y / s.Z) * drawH * 0.46f + cy;
+            if (sx < 0 || sx >= w || sy < 0 || sy >= drawH)
+                continue;
+
+            float b = 1f - s.Z;
+            Vector4 c = HsvToRgb((s.Z * 220f + 170f) % 360f, 0.3f + b * 0.7f, 1f);
+            c.W = alpha * b;
+            renderer.FillCircle(sx, sy, 1f + b * 3f, c);
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Effect 5 — Bouncing Bobs (additive blending)
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawBobs(float t, float alpha)
+    private static void DrawBobs(Dx12Renderer renderer, int w, int drawH, float t, float alpha)
     {
-        int scrollH = ScrollFontSize + 20;
-        int drawH = _h - scrollH;
-
-        // Render bobs to their own RT with additive blend for glow
-        Raylib.BeginTextureMode(_bobRT);
-        Raylib.ClearBackground(Rgba(5, 0, 18, 255));
-
-        Raylib.BeginBlendMode(BlendMode.Additive);
-        for (int b = 0; b < BobCount; b++)
+        const int bobCount = 12;
+        for (int i = 0; i < bobCount; i++)
         {
-            float phase = b * MathF.Tau / BobCount;
-            float ax = 0.85f + 0.1f * MathF.Sin(t * 0.3f + phase);
-            float ay = 0.75f + 0.1f * MathF.Cos(t * 0.4f + phase);
-            float bx = _w / 2f + ax * (_w * 0.4f)
-                         * MathF.Sin(t * (0.8f + b * 0.07f) + phase);
-            float by = drawH / 2f + ay * (drawH * 0.35f)
-                         * MathF.Cos(t * (0.7f + b * 0.09f) + phase * 1.3f);
+            float phase = i * MathF.Tau / bobCount;
+            float bx = w * 0.5f + w * 0.4f * MathF.Sin(t * (0.8f + i * 0.08f) + phase);
+            float by = drawH * 0.5f + drawH * 0.35f * MathF.Cos(t * (0.7f + i * 0.06f) + phase * 1.3f);
 
-            float hue = (b * 30f + t * 60f) % 360f;
-            var c = Raylib.ColorFromHSV(hue, 1f, 1f);
-
-            // Soft outer glow
-            for (int g = 5; g >= 1; g--)
+            Vector4 c = HsvToRgb((i * 30f + t * 70f) % 360f, 1f, 1f);
+            for (int g = 4; g >= 1; g--)
             {
-                byte ga = (byte)(30 * g);
-                Raylib.DrawCircleV(new Vector2(bx, by),
-                                   18f + g * 7f, Rgba(c.R, c.G, c.B, ga));
+                Vector4 glow = c;
+                glow.W = alpha * 0.1f * g;
+                renderer.FillCircle(bx, by, 12f + g * 5f, glow);
             }
-            // Core
-            Raylib.DrawCircleV(new Vector2(bx, by), 18f, c);
+
+            c.W = alpha;
+            renderer.FillCircle(bx, by, 11f, c);
         }
-        Raylib.EndBlendMode();
-        Raylib.EndTextureMode();
-
-        byte ta = (byte)(alpha * 255);
-        Raylib.DrawTexturePro(_bobRT.Texture,
-            new Rectangle(0, 0, _w, -_h),
-            new Rectangle(0, 0, _w, drawH),
-            Vector2.Zero, 0f, Rgba(255, 255, 255, ta));
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Effect 6 — 3-D Sine Landscape (wireframe grid)
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawSineLandscape(float t, float alpha)
+    private static void DrawSineLandscape(Dx12Renderer renderer, int w, int drawH, float t, float alpha, float resolutionScale)
     {
-        Raylib.ClearBackground(Rgba(0, 5, 20, 255));
+        int cols = Math.Max(20, (int)(38f / resolutionScale));
+        int rows = Math.Max(14, (int)(24f / resolutionScale));
+        float horizon = drawH * 0.28f;
+        float amplitude = 58f;
 
-        int cols = 40, rows = 30;
-        float cellW = 2.2f, cellD = 2.2f;
-        float originX = -cols / 2f * cellW;
+        for (int r = 0; r < rows; r++)
+        {
+            float depth = r / (float)(rows - 1);
+            float yBase = horizon + depth * (drawH - horizon - 20f);
+            float thick = 1f + depth * 1.6f;
 
-        // Use local effect time so the landscape does not scroll out of view
-        // before this effect is reached in the sequence.
-        float localT = _effectTime;
-        float originZ = -rows / 2f * cellD + localT * 4f;
-
-        _cam3d.Position = new Vector3(0, 13f, 18f);
-        _cam3d.Target = new Vector3(0, 0, -8f);
-        _cam3d.Up = Vector3.UnitY;
-        _cam3d.FovY = 50f;
-
-        // Scissor to leave scroller area
-        // Draw full then overdraw scroller area
-        Raylib.BeginMode3D(_cam3d);
-
-        // Draw grid rows
-        for (int rr = 0; rr < rows; rr++)
-            for (int cc = 0; cc < cols; cc++)
+            for (int c = 0; c < cols - 1; c++)
             {
-                float x0 = originX + cc * cellW;
-                float z0 = originZ + rr * cellD;
-                float x1 = x0 + cellW;
-                float z1 = z0 + cellD;
+                float x0 = c * (w / (float)(cols - 1));
+                float x1 = (c + 1) * (w / (float)(cols - 1));
 
-                float GetHeight(float x, float z)
-                {
-                    return 1.5f * MathF.Sin(x * 0.4f + t * 1.2f)
-                         + 1.0f * MathF.Cos(z * 0.3f + t * 0.9f)
-                         + 0.8f * MathF.Sin((x + z) * 0.25f + t * 1.5f);
-                }
+                float h0 = amplitude * (1f - depth)
+                         * MathF.Sin(c * 0.45f + t * 1.3f + r * 0.2f);
+                float h1 = amplitude * (1f - depth)
+                         * MathF.Sin((c + 1) * 0.45f + t * 1.3f + r * 0.2f);
 
-                float h00 = GetHeight(x0, z0);
-                float h10 = GetHeight(x1, z0);
-                float h01 = GetHeight(x0, z1);
+                float y0 = yBase + h0;
+                float y1 = yBase + h1;
 
-                float dist = MathF.Sqrt(x0 * x0 + z0 * z0) * 0.05f;
-                float hue = ((h00 + 3f) / 6f * 240f + 180f + t * 30f) % 360f;
-                float bri = Math.Clamp(1f - dist * 0.15f, 0.2f, 1f);
-                var c = Raylib.ColorFromHSV(hue, 1f, bri);
-                byte ca = (byte)(alpha * 255);
-                c = Rgba(c.R, c.G, c.B, ca);
-
-                var p00 = new Vector3(x0, h00, z0);
-                var p10 = new Vector3(x1, h10, z0);
-                var p01 = new Vector3(x0, h01, z1);
-
-                Raylib.DrawLine3D(p00, p10, c);
-                Raylib.DrawLine3D(p00, p01, c);
+                Vector4 col = HsvToRgb((190f + depth * 140f + t * 30f) % 360f, 1f, 0.6f + (1f - depth) * 0.35f);
+                col.W = alpha * 0.85f;
+                renderer.DrawLine(x0, y0, x1, y1, thick, col);
             }
-
-        Raylib.EndMode3D();
+        }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Effect 7 — Lissajous Curves (with fading trail)
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawLissajous(float t, float alpha)
+    private void DrawLissajous(Dx12Renderer renderer, int w, int drawH, float t, float alpha)
     {
-        Raylib.ClearBackground(Rgba(0, 0, 20, 255));
+        float cx = w * 0.5f;
+        float cy = drawH * 0.5f;
+        float rx = w * 0.42f;
+        float ry = drawH * 0.42f;
 
-        int scrollH = ScrollFontSize + 20;
-        int drawH = _h - scrollH;
-        float cx = _w / 2f, cy = drawH / 2f;
-        float rx = _w * 0.42f, ry = drawH * 0.42f;
-
-        // Ratio changes over time for variety
-        float a = 3f, b = 2f;
-        float delta = _lissT * 0.4f;
-
-        // Add current point to trail
-        float lx = cx + rx * MathF.Sin(a * _lissT + delta);
-        float ly = cy + ry * MathF.Sin(b * _lissT);
+        float lx = cx + rx * MathF.Sin(3f * t + t * 0.4f);
+        float ly = cy + ry * MathF.Sin(2f * t);
         _trail[_trailHead] = new Vector2(lx, ly);
-        _trailHead = (_trailHead + 1) % TrailLen;
+        _trailHead = (_trailHead + 1) % TrailLength;
 
-        // Draw trail with fading colour
-        for (int i = 0; i < TrailLen - 1; i++)
+        for (int i = 0; i < TrailLength - 1; i++)
         {
-            int idx0 = (_trailHead + i) % TrailLen;
-            int idx1 = (_trailHead + i + 1) % TrailLen;
-            if (_trail[idx0] == Vector2.Zero) continue;
+            int i0 = (_trailHead + i) % TrailLength;
+            int i1 = (_trailHead + i + 1) % TrailLength;
 
-            float ageF = i / (float)TrailLen;
-            float hue = (ageF * 360f + t * 80f) % 360f;
-            byte ba = (byte)(ageF * alpha * 180f);
-            var col = Raylib.ColorFromHSV(hue, 1f, 1f);
-            Raylib.DrawLineEx(_trail[idx0], _trail[idx1], 1.5f,
-                              Rgba(col.R, col.G, col.B, ba));
+            Vector2 p0 = _trail[i0];
+            Vector2 p1 = _trail[i1];
+            if (p0 == Vector2.Zero || p1 == Vector2.Zero)
+                continue;
+
+            float age = i / (float)TrailLength;
+            Vector4 c = HsvToRgb((age * 360f + t * 90f) % 360f, 1f, 1f);
+            c.W = age * alpha * 0.9f;
+            renderer.DrawLine(p0.X, p0.Y, p1.X, p1.Y, 2f, c);
         }
 
-        // Bright head dot
-        byte ha = (byte)(alpha * 255);
-        Raylib.DrawCircleV(new Vector2(lx, ly), 5f, Rgba(255, 255, 255, ha));
+        renderer.FillCircle(lx, ly, 5f, new Vector4(1f, 1f, 1f, alpha));
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Effect 8 — Tunnel Effect
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawTunnel(float t, float alpha)
+    private static void DrawTunnel(Dx12Renderer renderer, int w, int drawH, float t, float alpha, float resolutionScale)
     {
-        // Render pixel-by-pixel into the low-res tunnel texture
-        Raylib.BeginTextureMode(_tunnelRT);
-        Raylib.ClearBackground(Color.Black);
+        float cx = w * 0.5f + MathF.Sin(t * 0.7f) * 80f;
+        float cy = drawH * 0.5f + MathF.Cos(t * 0.5f) * 60f;
+        float maxR = MathF.Sqrt(w * w + drawH * drawH) * 0.55f;
+        int rings = Math.Max(22, (int)(42f / resolutionScale));
 
-        for (int py = 0; py < LH; py++)
-            for (int px = 0; px < LW; px++)
-            {
-                float fx = (px / (float)LW - 0.5f) * 2f;
-                float fy = (py / (float)LH - 0.5f) * 2f;
-
-                // Add sine wobble to the tunnel centre
-                float cx2 = 0.2f * MathF.Sin(t * 0.7f);
-                float cy2 = 0.2f * MathF.Cos(t * 0.5f);
-                float dx = fx - cx2, dy = fy - cy2;
-
-                float dist = MathF.Sqrt(dx * dx + dy * dy) + 0.001f;
-                float angle = MathF.Atan2(dy, dx);
-
-                float u = (angle / MathF.PI + t * 0.5f) % 1f;
-                float v = (1f / dist + t) % 1f;
-
-                float hue = ((u + v * 0.3f) * 360f) % 360f;
-                float bri = Math.Clamp(1f - dist * 0.3f, 0.1f, 1f);
-                Raylib.DrawPixel(px, py, Raylib.ColorFromHSV(hue, 1f, bri));
-            }
-
-        Raylib.EndTextureMode();
-
-        int scrollH = ScrollFontSize + 20;
-        byte ta = (byte)(alpha * 255);
-        Raylib.DrawTexturePro(_tunnelRT.Texture,
-            new Rectangle(0, 0, LW, -LH),
-            new Rectangle(0, 0, _w, _h - scrollH),
-            Vector2.Zero, 0f, Rgba(255, 255, 255, ta));
+        for (int i = 0; i < rings; i++)
+        {
+            float f = i / (float)rings;
+            float r = (f * maxR + (t * 240f)) % maxR;
+            Vector4 c = HsvToRgb((f * 360f + t * 80f) % 360f, 1f, 1f);
+            c.W = alpha * (1f - f) * 0.9f;
+            renderer.DrawEllipse(cx - r, cy - r, r * 2, r * 2, 2f, c);
+        }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Effect 9 — Interference / Moiré Rings
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawInterference(float t, float alpha)
+    private static void DrawInterference(Dx12Renderer renderer, int w, int drawH, float t, float alpha, float resolutionScale)
     {
-        Raylib.ClearBackground(Color.Black);
-
-        int scrollH = ScrollFontSize + 20;
-        int drawH = _h - scrollH;
-
-        // Two moving ring centres
-        float cx1 = _w * (0.35f + 0.12f * MathF.Sin(t * 0.6f));
+        float cx1 = w * (0.35f + 0.12f * MathF.Sin(t * 0.6f));
         float cy1 = drawH * (0.5f + 0.15f * MathF.Cos(t * 0.7f));
-        float cx2 = _w * (0.65f + 0.12f * MathF.Cos(t * 0.8f));
+        float cx2 = w * (0.65f + 0.12f * MathF.Cos(t * 0.8f));
         float cy2 = drawH * (0.5f - 0.15f * MathF.Sin(t * 0.5f));
 
-        int maxR = (int)(MathF.Sqrt(_w * _w + drawH * drawH) / 2) + 40;
-
-        for (int r = 4; r < maxR; r += 8)
+        int maxR = (int)(MathF.Sqrt(w * w + drawH * drawH) * 0.45f);
+        int ringStep = Math.Max(14, (int)(14f * resolutionScale));
+        for (int r = 8; r < maxR; r += ringStep)
         {
-            float t1 = r / 30f - t * 2.5f;
-            float t2 = r / 25f - t * 2.0f;
-            float wave = 0.5f + 0.5f * (MathF.Sin(t1) * MathF.Sin(t2));
-            if (wave < 0.5f) continue;  // Only draw bright fringes
+            float wave = 0.5f + 0.5f * MathF.Sin(r * 0.08f - t * 2.4f);
+            if (wave < 0.4f)
+                continue;
 
-            float hue = ((r * 1.5f + t * 60f)) % 360f;
-            byte ba = (byte)(wave * alpha * 200f);
-            var c = Raylib.ColorFromHSV(hue, 1f, 1f);
+            Vector4 c1 = HsvToRgb((r * 1.2f + t * 55f) % 360f, 1f, 1f);
+            c1.W = alpha * wave * 0.8f;
+            renderer.DrawEllipse(cx1 - r, cy1 - r, r * 2, r * 2, 2f, c1);
 
-            Raylib.DrawRing(new Vector2(cx1, cy1), r - 2, r + 2,
-                            0, 360, 60, Rgba(c.R, c.G, c.B, ba));
-            Raylib.DrawRing(new Vector2(cx2, cy2), r - 2, r + 2,
-                            0, 360, 60, Rgba(c.B, c.R, c.G, ba));
+            Vector4 c2 = HsvToRgb((r * 1.2f + t * 55f + 150f) % 360f, 1f, 1f);
+            c2.W = alpha * wave * 0.8f;
+            renderer.DrawEllipse(cx2 - r, cy2 - r, r * 2, r * 2, 2f, c2);
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Effect 10 — Dot Rotator / Torus Points
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawDotRotator(float t, float alpha)
+    private static void DrawDotRotator(Dx12Renderer renderer, int w, int drawH, float t, float alpha, float resolutionScale)
     {
-        Raylib.ClearBackground(Rgba(0, 0, 15, 255));
+        float cx = w * 0.5f;
+        float cy = drawH * 0.5f;
 
-        int scrollH = ScrollFontSize + 20;
-        int drawH = _h - scrollH;
-        float cx = _w / 2f, cy = drawH / 2f;
+        int uCount = Math.Max(14, (int)(28f / resolutionScale));
+        int vCount = Math.Max(8, (int)(14f / resolutionScale));
+        float R = 200f;
+        float r = 80f;
+        float rotX = t * 0.5f;
+        float rotY = t * 0.75f;
 
-        int torusU = 28, torusV = 18;
-        float R = 200f, r2 = 85f;   // major/minor radii in px
-
-        float rotX = t * 0.4f;
-        float rotY = t * 0.7f;
-
-        for (int u = 0; u < torusU; u++)
-            for (int v = 0; v < torusV; v++)
+        for (int u = 0; u < uCount; u++)
+        {
+            for (int v = 0; v < vCount; v++)
             {
-                float au = u * MathF.Tau / torusU;
-                float av = v * MathF.Tau / torusV;
+                float au = u * MathF.Tau / uCount;
+                float av = v * MathF.Tau / vCount;
 
-                // Sine displacement ripple
-                float disp = 12f * MathF.Sin(au * 3f + t * 2.5f)
-                                   * MathF.Cos(av * 2f + t * 1.8f);
+                float disp = 12f * MathF.Sin(au * 3f + t * 2.2f) * MathF.Cos(av * 2f + t * 1.6f);
+                float x = (R + r * MathF.Cos(av) + disp) * MathF.Cos(au);
+                float y = (R + r * MathF.Cos(av) + disp) * MathF.Sin(au);
+                float z = r * MathF.Sin(av);
 
-                float x3 = (R + r2 * MathF.Cos(av) + disp) * MathF.Cos(au);
-                float y3 = (R + r2 * MathF.Cos(av) + disp) * MathF.Sin(au);
-                float z3 = r2 * MathF.Sin(av);
+                float y2 = y * MathF.Cos(rotX) - z * MathF.Sin(rotX);
+                float z2 = y * MathF.Sin(rotX) + z * MathF.Cos(rotX);
+                float x3 = x * MathF.Cos(rotY) + z2 * MathF.Sin(rotY);
+                float z3 = -x * MathF.Sin(rotY) + z2 * MathF.Cos(rotY);
 
-                // Rotate X
-                float y4 = y3 * MathF.Cos(rotX) - z3 * MathF.Sin(rotX);
-                float z4 = y3 * MathF.Sin(rotX) + z3 * MathF.Cos(rotX);
+                float depth = 620f;
+                float pz = z3 + depth;
+                if (pz <= 0.01f)
+                    continue;
 
-                // Rotate Y
-                float x5 = x3 * MathF.Cos(rotY) + z4 * MathF.Sin(rotY);
-                float z5 = -x3 * MathF.Sin(rotY) + z4 * MathF.Cos(rotY);
+                float px = cx + x3 * depth / pz;
+                float py = cy + y2 * depth / pz;
 
-                float depth = 600f;
-                float pz = z5 + depth;
-                if (pz <= 0.01f) continue;
-
-                float px = cx + x5 * depth / pz;
-                float py = cy + y4 * depth / pz;
-
-                float bright = Math.Clamp((z5 + r2 + R) / (2 * (R + r2)), 0.2f, 1f);
-                float hue = (au * 180f / MathF.PI + t * 50f + v * 15f) % 360f;
-                var c = Raylib.ColorFromHSV(hue, 1f, bright);
-                byte ba = (byte)(alpha * 255 * bright);
-                float dotR = Math.Max(1.5f, (depth / pz) * 3.5f);
-
-                Raylib.DrawCircleV(new Vector2(px, py), dotR, Rgba(c.R, c.G, c.B, ba));
+                Vector4 c = HsvToRgb((u * 13f + v * 21f + t * 60f) % 360f, 1f, 1f);
+                c.W = alpha * 0.9f;
+                float dotR = Math.Max(1.4f, (depth / pz) * 2.8f);
+                renderer.FillCircle(px, py, dotR, c);
             }
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════
-    // Scroller Bar (runs at the bottom across ALL effects)
-    // ═════════════════════════════════════════════════════════════════════════
-    private void DrawScrollerBar()
-    {
-        int scrollH = ScrollFontSize + 20;
-        int barY = _h - scrollH;
-
-        // Background bar with gradient
-        for (int row = 0; row < scrollH; row++)
-        {
-            float f = row / (float)scrollH;
-            float hue = (_time * 60f + f * 40f) % 360f;
-            float bri = 0.15f + 0.1f * f;
-            var c = Raylib.ColorFromHSV(hue, 0.9f, bri);
-            Raylib.DrawRectangle(0, barY + row, _w, 1, c);
-        }
-
-        // Separator line
-        Raylib.DrawRectangle(0, barY, _w, 2,
-                             Rgba(200, 255, 200, 200));
-
-        // Sine-modulated Y for the text
-        float textSineY = 4f * MathF.Sin(_time * 3f);
-        int textY = barY + (scrollH - ScrollFontSize) / 2 + (int)textSineY;
-
-        // We draw the scroller text twice so it wraps seamlessly
-        int totalW = Raylib.MeasureText(ScrollText, ScrollFontSize);
-        int sx = (int)_scrollX;
-
-        // Clip scroller to the bar area
-        Raylib.BeginScissorMode(0, barY, _w, scrollH);
-
-        // Rainbow colour on each character
-        DrawRainbowText(ScrollText, sx, textY, ScrollFontSize);
-        DrawRainbowText(ScrollText, sx + totalW, textY, ScrollFontSize);
-
-        Raylib.EndScissorMode();
-    }
-
-    private void DrawRainbowText(string text, int x, int y, int fontSize)
-    {
-        float charWidth = fontSize * 0.55f;
-        for (int ci = 0; ci < text.Length; ci++)
-        {
-            int cx2 = x + (int)(ci * charWidth);
-            if (cx2 + charWidth < 0 || cx2 > _w) continue;
-
-            float hue = ((ci * 12f) + _time * 120f) % 360f;
-            var c = Raylib.ColorFromHSV(hue, 1f, 1f);
-            Raylib.DrawText(text[ci].ToString(), cx2, y, fontSize, c);
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    private static readonly string[] EffectNames =
-    [
-        "1. MULTI-LAYER SINE WAVES",
-        "2. CLASSIC PLASMA",
-        "3. COPPER BARS",
-        "4. STARFIELD",
-        "5. BOUNCING BOBS",
-        "6. 3D SINE LANDSCAPE",
-        "7. LISSAJOUS CURVES",
-        "8. TUNNEL EFFECT",
-        "9. INTERFERENCE RINGS",
-        "10. DOT ROTATOR / TORUS",
-    ];
-
-    private void DrawEffectLabel(int idx, float alpha)
+    private static void DrawScroller(Dx12Renderer renderer, int w, int h, float t)
     {
-        if (idx >= EffectNames.Length) return;
-        int fs = 18;
-        byte ba = (byte)(Math.Clamp(alpha * 1.5f, 0f, 1f) * 160);
-        Raylib.DrawText(EffectNames[idx], 12, 10, fs, Rgba(255, 255, 200, ba));
+        const float barH = 78f;
+        float barY = h - barH;
+
+        for (int row = 0; row < barH; row++)
+        {
+            float f = row / barH;
+            renderer.FillRect(0, barY + row, w, 1,
+                new Vector4(0.02f + f * 0.12f, 0.06f + f * 0.08f, 0.12f + f * 0.16f, 1f));
+        }
+
+        renderer.FillRect(0, barY, w, 2, new Vector4(0.8f, 1f, 0.8f, 0.8f));
+
+        string text = "*** DIRECTX12 SINUS FX *** MULTI-WAVES * PLASMA * COPPER * STARFIELD * BOBS * LANDSCAPE * LISSAJOUS * TUNNEL * INTERFERENCE * DOT ROTATOR ***";
+        float speed = 210f;
+        float textY = barY + 22f + 5f * MathF.Sin(t * 3f);
+
+        float x = w - (t * speed % (w + 2200));
+        renderer.DrawText(text, x, textY, 28f, new Vector4(1f, 0.9f, 0.35f, 0.95f));
+        renderer.DrawText(text, x + 2000f, textY, 28f, new Vector4(0.45f, 1f, 1f, 0.95f));
     }
 
-    private void DrawScanlines()
+    private void DrawLabel(Dx12Renderer renderer, int w)
     {
-        var sc = Rgba(0, 0, 0, 50);
-        for (int y = 0; y < _h; y += 2)
-            Raylib.DrawRectangle(0, y, _w, 1, sc);
+        string[] labels =
+        [
+            "1. MULTI-LAYER SINE WAVES",
+            "2. CLASSIC PLASMA",
+            "3. COPPER BARS",
+            "4. STARFIELD",
+            "5. BOUNCING BOBS",
+            "6. SINE LANDSCAPE",
+            "7. LISSAJOUS CURVES",
+            "8. TUNNEL EFFECT",
+            "9. INTERFERENCE RINGS",
+            "10. DOT ROTATOR",
+        ];
+
+        int idx = Math.Clamp(_effectIndex, 0, labels.Length - 1);
+        if (_labelWidths[idx] <= 0f)
+            _labelWidths[idx] = renderer.MeasureText(labels[idx], 20f).Width;
+
+        renderer.DrawText(labels[idx], (w - _labelWidths[idx]) * 0.5f, 12f, 20f, new Vector4(1f, 1f, 0.8f, 0.85f));
     }
 
-    private void EnsureRenderTargetSize()
+    private static void DrawScanlines(Dx12Renderer renderer, int w, int h, float resolutionScale)
     {
-        int w = Raylib.GetScreenWidth();
-        int h = Raylib.GetScreenHeight();
-
-        if (w <= 0 || h <= 0)
-            return;
-
-        if (w == _w && h == _h)
-            return;
-
-        Raylib.UnloadRenderTexture(_bobRT);
-        _bobRT = Raylib.LoadRenderTexture(w, h);
-
-        _w = w;
-        _h = h;
+        Vector4 sc = new(0f, 0f, 0f, 0.18f);
+        int step = Math.Max(3, (int)(3f * resolutionScale));
+        for (int y = 0; y < h; y += step)
+            renderer.FillRect(0, y, w, 1, sc);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    private static Vector4 HsvToRgb(float h, float s, float v)
+    {
+        float c = v * s;
+        float x = c * (1 - MathF.Abs((h / 60f % 2) - 1));
+        float m = v - c;
+
+        float r = 0f;
+        float g = 0f;
+        float b = 0f;
+        if (h < 60f) { r = c; g = x; }
+        else if (h < 120f) { r = x; g = c; }
+        else if (h < 180f) { g = c; b = x; }
+        else if (h < 240f) { g = x; b = c; }
+        else if (h < 300f) { r = x; b = c; }
+        else { r = c; b = x; }
+
+        return new Vector4(r + m, g + m, b + m, 1f);
+    }
+
     public void Dispose()
     {
-        Raylib.UnloadRenderTexture(_plasma);
-        Raylib.UnloadRenderTexture(_bobRT);
-        Raylib.UnloadRenderTexture(_tunnelRT);
     }
 }

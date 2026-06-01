@@ -1,92 +1,122 @@
-using Raylib_cs;
+using System.Diagnostics;
+using System.Numerics;
+using System.Windows.Forms;
+using NAudio.Wave;
+using RetroDemo;
 using RetroDemo.Scenes;
 
-int monitor = 0;
-int screenWidth = Raylib.GetMonitorWidth(monitor);
-int screenHeight = Raylib.GetMonitorHeight(monitor);
+ApplicationConfiguration.Initialize();
 
-// Enable anti-aliasing, vsync, and fullscreen before the window is created
-Raylib.SetConfigFlags(ConfigFlags.Msaa4xHint | ConfigFlags.VSyncHint | ConfigFlags.FullscreenMode);
-Raylib.InitWindow(screenWidth, screenHeight, "RetroDemo — Amiga 500 Style Demo");
-Raylib.SetTargetFPS(60);
-Raylib.InitAudioDevice();
+const int WindowWidth = 1280;
+const int WindowHeight = 720;
 
-// ── Background music ─────────────────────────────────────────────────────────
-bool hasMusicLoaded = false;
-Music bgMusic = default;
+using var window = new Form
+{
+    Text = "RetroDemo — DirectX 12",
+    FormBorderStyle = FormBorderStyle.FixedSingle,
+    ClientSize = new Size(WindowWidth, WindowHeight),
+    MaximizeBox = false,
+    MinimizeBox = true,
+    TopMost = false,
+    StartPosition = FormStartPosition.CenterScreen,
+    KeyPreview = true,
+};
+
+bool shouldQuit = false;
+window.KeyDown += (_, e) =>
+{
+    if (e.KeyCode == Keys.Escape)
+        shouldQuit = true;
+};
+
+window.Show();
+
+using var renderer = new Dx12Renderer(window.Handle, WindowWidth, WindowHeight);
+
+// ── Background music (optional) ─────────────────────────────────────────────
+WaveOutEvent? musicOut = null;
+AudioFileReader? musicReader = null;
 
 string[] musicSearchPaths =
 [
     Path.Combine(AppContext.BaseDirectory, "Assets", "music.mp3"),
-    Path.Combine(AppContext.BaseDirectory, "Assets", "music.ogg"),
     Path.Combine(AppContext.BaseDirectory, "Assets", "music.wav"),
+    Path.Combine(AppContext.BaseDirectory, "music.mp3"),
+    Path.Combine(AppContext.BaseDirectory, "music.wav"),
     "Assets/music.mp3",
-    "Assets/music.ogg",
+    "Assets/music.wav",
     "music.mp3",
+    "music.wav",
 ];
 
 foreach (string path in musicSearchPaths)
 {
-    if (File.Exists(path))
+    if (!File.Exists(path))
+        continue;
+
+    try
     {
-        bgMusic = Raylib.LoadMusicStream(path);
-        Raylib.SetMusicVolume(bgMusic, 0.8f);
-        Raylib.PlayMusicStream(bgMusic);
-        hasMusicLoaded = true;
+        musicReader = new AudioFileReader(path) { Volume = 0.8f };
+        musicOut = new WaveOutEvent();
+        musicOut.Init(musicReader);
+        musicOut.Play();
         break;
+    }
+    catch
+    {
+        musicOut?.Dispose();
+        musicReader?.Dispose();
+        musicOut = null;
+        musicReader = null;
     }
 }
 
 // ── Scenes ───────────────────────────────────────────────────────────────────
 IScene[] scenes =
 [
-    new TeleprompterScene(screenWidth, screenHeight),
-    new FaceMorphScene(screenWidth, screenHeight),
-    new SinusScene(screenWidth, screenHeight),
+    new TeleprompterScene(WindowWidth, WindowHeight),
+    new FaceMorphScene(WindowWidth, WindowHeight),
+    new SinusScene(WindowWidth, WindowHeight),
 ];
-
 int sceneIndex = 0;
 
-// ── Main loop ─────────────────────────────────────────────────────────────────
-while (!Raylib.WindowShouldClose() && sceneIndex < scenes.Length)
+var stopwatch = Stopwatch.StartNew();
+double lastTime = stopwatch.Elapsed.TotalSeconds;
+
+// ── Main loop ────────────────────────────────────────────────────────────────
+while (!shouldQuit && !window.IsDisposed)
 {
-    float dt = Raylib.GetFrameTime();
+    Application.DoEvents();
 
-    // Update streaming music buffer every frame
-    if (hasMusicLoaded)
-        Raylib.UpdateMusicStream(bgMusic);
+    double now = stopwatch.Elapsed.TotalSeconds;
+    float dt = (float)(now - lastTime);
+    lastTime = now;
 
-    // Space or Enter skips the current scene
-    if (Raylib.IsKeyPressed(KeyboardKey.Space) || Raylib.IsKeyPressed(KeyboardKey.Enter))
-        sceneIndex++;
-
-    // Escape quits immediately
-    if (Raylib.IsKeyPressed(KeyboardKey.Escape))
-        break;
-
-    if (sceneIndex >= scenes.Length)
-        break;
-
-    bool sceneDone = scenes[sceneIndex].Update(dt);
-
-    Raylib.BeginDrawing();
-    Raylib.ClearBackground(Color.Black);
-    scenes[sceneIndex].Draw();
-    Raylib.EndDrawing();
+    IScene activeScene = scenes[sceneIndex];
+    bool sceneDone = activeScene.Update(dt);
 
     if (sceneDone)
-        sceneIndex++;
+    {
+        // Loop the final sinus scene forever; earlier scenes advance once.
+        if (sceneIndex < scenes.Length - 1)
+        {
+            sceneIndex++;
+            activeScene = scenes[sceneIndex];
+        }
+        else
+        {
+            activeScene.Dispose();
+            scenes[sceneIndex] = new SinusScene(WindowWidth, WindowHeight);
+            activeScene = scenes[sceneIndex];
+        }
+    }
+
+    activeScene.Draw(renderer);
 }
 
-// ── Cleanup ───────────────────────────────────────────────────────────────────
 foreach (IScene scene in scenes)
     scene.Dispose();
 
-if (hasMusicLoaded)
-{
-    Raylib.StopMusicStream(bgMusic);
-    Raylib.UnloadMusicStream(bgMusic);
-}
-
-Raylib.CloseAudioDevice();
-Raylib.CloseWindow();
+musicOut?.Stop();
+musicOut?.Dispose();
+musicReader?.Dispose();

@@ -9,6 +9,6 @@ public interface IScene : IDisposable
     /// </summary>
     bool Update(float deltaTime);
 
-    /// <summary>Draw the scene. Must be called between BeginDrawing/EndDrawing.</summary>
-    void Draw();
+    /// <summary>Draw the scene via the DirectX 12 renderer.</summary>
+    void Draw(Dx12Renderer renderer);
 }

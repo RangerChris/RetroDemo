@@ -1,449 +1,225 @@
 using System.Numerics;
-using Raylib_cs;
-using static RetroDemo.ColorHelper;
 
 namespace RetroDemo.Scenes;
 
-/// <summary>
-/// Shows a stylised 3-D female face that smiles, then morphs into a robot face.
-/// Two render-textures are alpha-composited for the crossfade transition.
-/// </summary>
 public sealed class FaceMorphScene : IScene
 {
-    private int _w;
-    private int _h;
-
-    // ── render textures ───────────────────────────────────────────────────────
-    private RenderTexture2D _rtFemale;
-    private RenderTexture2D _rtRobot;
-
-    // ── timing ────────────────────────────────────────────────────────────────
-    private const float FemaleShowTime = 4.0f;   // seconds female face is shown
-    private const float MorphDuration = 3.0f;   // seconds of morph transition
-    private const float RobotShowTime = 3.5f;   // seconds robot face is shown
+    private const float FemaleShowTime = 4.0f;
+    private const float MorphDuration = 3.0f;
+    private const float RobotShowTime = 3.5f;
     private const float OutroDuration = 0.8f;
 
-    private float _time = 0f;
-    private float _morphT = 0f;   // 0 = female, 1 = robot
-    private float _smileT = 0f;   // 0 = neutral, 1 = full smile
-    private float _outroT = 0f;
-
-    // ── camera ────────────────────────────────────────────────────────────────
-    private Camera3D _camera = new()
-    {
-        Position = new Vector3(0, 0.2f, 6.5f),
-        Target = new Vector3(0, 0, 0),
-        Up = Vector3.UnitY,
-        FovY = 40f,
-        Projection = CameraProjection.Perspective,
-    };
-
-    // ── particle system ───────────────────────────────────────────────────────
-    private struct Particle
-    {
-        public Vector2 Pos;
-        public Vector2 Vel;
-        public Color Col;
-        public float Life;
-        public float MaxLife;
-    }
-
-    private readonly Particle[] _particles = new Particle[300];
-    private readonly Random _rng = new(42);
-    private bool _particlesBurst = false;
-
-    // ── skin / metal colours ──────────────────────────────────────────────────
-    private static Color Skin => new(255, 200, 165, 255);
-    private static Color SkinDk => new(220, 165, 130, 255);
-    private static Color HairCol => new(60, 30, 10, 255);
-    private static Color IrisCol => new(80, 130, 230, 255);
-    private static Color LipCol => new(220, 100, 90, 255);
-    private static Color MetalLt => new(160, 175, 185, 255);
-    private static Color MetalDk => new(80, 90, 100, 255);
-    private static Color GlowRed => new(255, 40, 20, 255);
-    private static Color DarkTint => new(10, 10, 30, 255);
+    private float _time;
+    private float _morphT;
+    private float _smileT;
+    private float _outroT;
 
     public FaceMorphScene(int w, int h)
     {
-        _w = w;
-        _h = h;
-        _rtFemale = Raylib.LoadRenderTexture(w, h);
-        _rtRobot = Raylib.LoadRenderTexture(w, h);
+        _ = w;
+        _ = h;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    public bool Update(float dt)
+    public bool Update(float deltaTime)
     {
-        _time += dt;
+        _time += deltaTime;
 
-        // Smile animation: starts at FemaleShowTime - 1.5 sec
         float smileStart = FemaleShowTime - 1.5f;
         if (_time >= smileStart)
             _smileT = Math.Clamp((_time - smileStart) / 1.2f, 0f, 1f);
 
-        // Morph factor
         float morphStart = FemaleShowTime;
         if (_time >= morphStart)
-        {
             _morphT = Math.Clamp((_time - morphStart) / MorphDuration, 0f, 1f);
-            if (!_particlesBurst && _morphT > 0.05f)
-            {
-                BurstParticles();
-                _particlesBurst = true;
-            }
-        }
 
-        // Outro
         float outroStart = FemaleShowTime + MorphDuration + RobotShowTime;
         if (_time >= outroStart)
-        {
-            _outroT += dt / OutroDuration;
-            if (_outroT >= 1f) return true;
-        }
+            _outroT = Math.Clamp((_time - outroStart) / OutroDuration, 0f, 1f);
 
-        // Update particles
-        for (int i = 0; i < _particles.Length; i++)
-        {
-            ref var p = ref _particles[i];
-            if (p.Life <= 0f) continue;
-            p.Life -= dt;
-            p.Pos += p.Vel * dt;
-            p.Vel.Y += 80f * dt; // gravity
-        }
-
-        return false;
+        return _time >= FemaleShowTime + MorphDuration + RobotShowTime + OutroDuration;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    public void Draw()
+    public void Draw(Dx12Renderer renderer)
     {
-        EnsureRenderTextureSize();
-
+        int w = renderer.Width;
+        int h = renderer.Height;
         float t = _time;
 
-        // ── render female face to RT ──────────────────────────────────────────
-        Raylib.BeginTextureMode(_rtFemale);
-        Raylib.ClearBackground(Rgba(10, 5, 30, 255));
-        DrawBackground(t, female: true);
-        Raylib.BeginMode3D(_camera);
+        Vector4 bgA = new(0.03f, 0.02f, 0.08f, 1f);
+        Vector4 bgB = new(0.02f, 0.12f, 0.18f, 1f);
+        Vector4 bg = Vector4.Lerp(bgA, bgB, _morphT);
+        bg.W = 1f;
+        renderer.Clear(bg);
+
+        renderer.BeginOverlay();
+        DrawBackgroundStars(renderer, w, h, t);
+
+        float centerX = w * 0.5f;
+        float centerY = h * 0.5f;
+        float faceScale = MathF.Min(w / 1920f, h / 1080f);
+        faceScale = Math.Clamp(faceScale, 0.75f, 1.35f);
+
+        float globalAlpha = 1f - _outroT;
+        float femaleAlpha = (1f - _morphT) * globalAlpha;
+        float robotAlpha = _morphT * globalAlpha;
+
         float femaleTurnT = Math.Clamp(_time / FemaleShowTime, 0f, 1f);
-        float femaleRotY = -22f * femaleTurnT;
-        DrawFemaleFace(femaleRotY, _smileT);
-        Raylib.EndMode3D();
-        Raylib.EndTextureMode();
+        float femaleYaw = -22f * femaleTurnT;
 
-        // ── render robot face to RT ───────────────────────────────────────────
-        Raylib.BeginTextureMode(_rtRobot);
-        Raylib.ClearBackground(Rgba(5, 10, 20, 255));
-        DrawBackground(t, female: false);
-        Raylib.BeginMode3D(_camera);
         float robotTurnT = Math.Clamp((_time - FemaleShowTime) / MorphDuration, 0f, 1f);
-        float robotRotY = 22f * robotTurnT;
-        DrawRobotFace(robotRotY);
-        Raylib.EndMode3D();
-        Raylib.EndTextureMode();
+        float robotYaw = 22f * robotTurnT;
 
-        // ── composite onto screen ─────────────────────────────────────────────
-        // Raylib render-textures have Y flipped; use negative-height source rect.
-        var srcRect = new Rectangle(0, 0, _w, -_h);
-        var dstRect = new Rectangle(0, 0, _w, _h);
+        DrawFemaleFace(renderer, centerX, centerY, faceScale, femaleYaw, _smileT, femaleAlpha);
+        DrawRobotFace(renderer, centerX, centerY, faceScale, robotYaw, t, robotAlpha);
 
-        float globalAlpha = 1f - Math.Clamp(_outroT, 0f, 1f);
-        byte ga = (byte)(globalAlpha * 255);
-
-        byte femaleA = (byte)(Math.Clamp(1f - _morphT, 0f, 1f) * ga);
-        byte robotA = (byte)(Math.Clamp(_morphT, 0f, 1f) * ga);
-
-        if (femaleA > 0)
-            Raylib.DrawTexturePro(_rtFemale.Texture, srcRect, dstRect,
-                                  Vector2.Zero, 0f, Rgba(255, 255, 255, femaleA));
-        if (robotA > 0)
-            Raylib.DrawTexturePro(_rtRobot.Texture, srcRect, dstRect,
-                                  Vector2.Zero, 0f, Rgba(255, 255, 255, robotA));
-
-        // ── chromatic-aberration glitch during morph ──────────────────────────
-        if (_morphT > 0f && _morphT < 1f)
-            DrawGlitch(_morphT);
-
-        // ── particles ─────────────────────────────────────────────────────────
-        DrawParticles();
-
-        // ── scanlines ─────────────────────────────────────────────────────────
-        DrawScanlines();
-
-        // ── label ────────────────────────────────────────────────────────────
-        DrawLabel();
+        DrawGlitchStrips(renderer, w, h, _morphT);
+        DrawLabel(renderer, w, h, globalAlpha);
+        DrawScanlines(renderer, w, h);
+        renderer.EndOverlay();
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Background gradient / stars
-    // ─────────────────────────────────────────────────────────────────────────
-    private void DrawBackground(float t, bool female)
+    private static void DrawBackgroundStars(Dx12Renderer renderer, int w, int h, float t)
     {
         int steps = 80;
         for (int i = 0; i < steps; i++)
         {
             float f = i / (float)steps;
-            float h = female
-                ? (220f + f * 80f) % 360f         // purple→blue for female
-                : (190f + f * 60f) % 360f;         // teal→blue for robot
-            h = (h + t * 10f) % 360f;
-            float brightness = 0.12f + f * 0.08f;
-            var c = Raylib.ColorFromHSV(h, 0.8f, brightness);
-            Raylib.DrawRectangle(0, (int)(i * _h / steps), _w, _h / steps + 1, c);
+            Vector4 c = new(0.05f + f * 0.03f, 0.05f + f * 0.05f, 0.12f + f * 0.08f, 0.85f);
+            renderer.FillRect(0, i * h / steps, w, h / steps + 1, c);
         }
 
-        // Distant stars
-        var rand = new Random(1234);
-        for (int s = 0; s < 120; s++)
+        for (int i = 0; i < 120; i++)
         {
-            int sx = rand.Next(_w);
-            int sy = rand.Next(_h);
-            float twinkle = 0.5f + 0.5f * MathF.Sin(t * 2.3f + s);
-            byte sb = (byte)(twinkle * 180);
-            Raylib.DrawPixel(sx, sy, Rgba(sb, sb, (byte)(sb + 30), 255));
+            float sx = i * 113 % w;
+            float sy = i * 73 % h;
+            float twinkle = 0.35f + 0.65f * (0.5f + 0.5f * MathF.Sin(t * 2.3f + i));
+            renderer.FillRect(sx, sy, 2, 2, new Vector4(0.8f, 0.9f, 1f, twinkle * 0.7f));
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // 3-D Female face (sphere-based)
-    // ─────────────────────────────────────────────────────────────────────────
-    private void DrawFemaleFace(float rotDeg, float smileT)
+    private static void DrawFemaleFace(Dx12Renderer renderer, float cx, float cy, float scale, float yawDeg, float smileT, float alpha)
     {
-        float r = rotDeg * MathF.PI / 180f;
-        float cos = MathF.Cos(r);
-        float sin = MathF.Sin(r);
+        if (alpha <= 0.001f)
+            return;
 
-        Vector3 Rot(Vector3 v)
-        {
-            return new Vector3(v.X * cos - v.Z * sin, v.Y, v.X * sin + v.Z * cos);
-        }
+        float yaw = yawDeg / 30f;
+        float xOffset = yaw * 70f * scale;
+        float widthScale = 1f - MathF.Abs(yaw) * 0.18f;
 
-        // Hair (slightly oversized sphere – drawn first so face overlaps)
-        Raylib.DrawSphereEx(Rot(new Vector3(0, 0.18f, -0.05f)), 1.08f, 12, 12, HairCol);
+        float fw = 340f * scale * widthScale;
+        float fh = 430f * scale;
+        float fx = cx - fw * 0.5f + xOffset;
+        float fy = cy - fh * 0.58f;
 
-        // Head
-        Raylib.DrawSphereEx(Rot(Vector3.Zero), 1.0f, 16, 16, Skin);
+        Vector4 hair = new(0.22f, 0.11f, 0.04f, alpha);
+        Vector4 skin = new(1.0f, 0.80f, 0.66f, alpha);
+        Vector4 blush = new(1f, 0.52f, 0.55f, alpha * (0.15f + smileT * 0.4f));
+        Vector4 lip = new(0.86f, 0.39f, 0.35f, alpha);
 
-        // Cheeks (for the smile blush)
-        if (smileT > 0f)
-        {
-            byte ba = (byte)(smileT * 80);
-            var blush = Rgba(255, 140, 140, ba);
-            Raylib.DrawSphereEx(Rot(new Vector3(-0.55f, -0.05f, 0.78f)), 0.28f, 8, 8, blush);
-            Raylib.DrawSphereEx(Rot(new Vector3(0.55f, -0.05f, 0.78f)), 0.28f, 8, 8, blush);
-        }
+        renderer.FillEllipse(fx - 20f * scale, fy - 35f * scale, fw + 40f * scale, fh + 70f * scale, hair);
+        renderer.FillEllipse(fx, fy, fw, fh, skin);
 
-        // Eye whites
-        Raylib.DrawSphereEx(Rot(new Vector3(-0.32f, 0.22f, 0.93f)), 0.145f, 8, 8, Color.White);
-        Raylib.DrawSphereEx(Rot(new Vector3(0.32f, 0.22f, 0.93f)), 0.145f, 8, 8, Color.White);
+        float eyeY = fy + fh * 0.38f;
+        float eyeDX = fw * 0.22f;
+        float pupilShift = yaw * 12f * scale;
 
-        // Irises
-        Raylib.DrawSphereEx(Rot(new Vector3(-0.32f, 0.22f, 1.00f)), 0.085f, 8, 8, IrisCol);
-        Raylib.DrawSphereEx(Rot(new Vector3(0.32f, 0.22f, 1.00f)), 0.085f, 8, 8, IrisCol);
+        renderer.FillEllipse(cx - eyeDX + xOffset - 23f * scale, eyeY - 16f * scale, 46f * scale, 32f * scale, new Vector4(1f, 1f, 1f, alpha));
+        renderer.FillEllipse(cx + eyeDX + xOffset - 23f * scale, eyeY - 16f * scale, 46f * scale, 32f * scale, new Vector4(1f, 1f, 1f, alpha));
 
-        // Pupils
-        Raylib.DrawSphereEx(Rot(new Vector3(-0.32f, 0.22f, 1.05f)), 0.04f, 8, 8, Color.Black);
-        Raylib.DrawSphereEx(Rot(new Vector3(0.32f, 0.22f, 1.05f)), 0.04f, 8, 8, Color.Black);
+        renderer.FillCircle(cx - eyeDX + xOffset + pupilShift, eyeY, 9f * scale, new Vector4(0.31f, 0.51f, 0.9f, alpha));
+        renderer.FillCircle(cx + eyeDX + xOffset + pupilShift, eyeY, 9f * scale, new Vector4(0.31f, 0.51f, 0.9f, alpha));
+        renderer.FillCircle(cx - eyeDX + xOffset + pupilShift, eyeY, 4f * scale, new Vector4(0f, 0f, 0f, alpha));
+        renderer.FillCircle(cx + eyeDX + xOffset + pupilShift, eyeY, 4f * scale, new Vector4(0f, 0f, 0f, alpha));
 
-        // Nose
-        Raylib.DrawSphereEx(Rot(new Vector3(0, -0.06f, 0.97f)), 0.07f, 8, 8, SkinDk);
+        renderer.FillEllipse(cx + xOffset - 12f * scale, fy + fh * 0.5f, 24f * scale, 44f * scale, new Vector4(0.87f, 0.67f, 0.55f, alpha));
 
-        // Mouth: corners animate upward with smile
-        float smileYOff = smileT * 0.12f;
-        float smileZOff = smileT * 0.04f;
+        float mouthY = fy + fh * 0.75f;
+        float smileUp = smileT * 12f * scale;
+        renderer.DrawLine(cx - 45f * scale + xOffset, mouthY + smileUp, cx + 45f * scale + xOffset, mouthY + smileUp, 4f * scale, lip);
+        renderer.FillEllipse(cx - 56f * scale + xOffset, mouthY + smileUp - 6f * scale, 16f * scale, 16f * scale, lip);
+        renderer.FillEllipse(cx + 40f * scale + xOffset, mouthY + smileUp - 6f * scale, 16f * scale, 16f * scale, lip);
 
-        // Lower lip
-        Raylib.DrawSphereEx(Rot(new Vector3(0, -0.42f + smileYOff * 0.3f, 0.90f)), 0.10f, 8, 8, LipCol);
-        // Upper lip
-        Raylib.DrawSphereEx(Rot(new Vector3(0, -0.32f, 0.92f)), 0.07f, 8, 8, LipCol);
-        // Mouth corners
-        Raylib.DrawSphereEx(Rot(new Vector3(-0.20f, -0.39f + smileYOff, 0.88f + smileZOff)), 0.055f, 6, 6, LipCol);
-        Raylib.DrawSphereEx(Rot(new Vector3(0.20f, -0.39f + smileYOff, 0.88f + smileZOff)), 0.055f, 6, 6, LipCol);
-
-        // Light eyebrow arcs (tiny flattened spheres)
-        Raylib.DrawSphereEx(Rot(new Vector3(-0.32f, 0.46f, 0.90f)), 0.05f, 6, 4, HairCol);
-        Raylib.DrawSphereEx(Rot(new Vector3(-0.18f, 0.50f, 0.87f)), 0.045f, 6, 4, HairCol);
-        Raylib.DrawSphereEx(Rot(new Vector3(0.32f, 0.46f, 0.90f)), 0.05f, 6, 4, HairCol);
-        Raylib.DrawSphereEx(Rot(new Vector3(0.18f, 0.50f, 0.87f)), 0.045f, 6, 4, HairCol);
-
-        // Neck
-        Raylib.DrawCylinder(Rot(new Vector3(0, -1.05f, 0)), 0.28f, 0.28f, 0.35f, 12, Skin);
+        renderer.FillEllipse(cx - 95f * scale + xOffset, fy + fh * 0.58f, 46f * scale, 36f * scale, blush);
+        renderer.FillEllipse(cx + 49f * scale + xOffset, fy + fh * 0.58f, 46f * scale, 36f * scale, blush);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // 3-D Robot face (cube/cylinder-based)
-    // ─────────────────────────────────────────────────────────────────────────
-    private void DrawRobotFace(float rotDeg)
+    private static void DrawRobotFace(Dx12Renderer renderer, float cx, float cy, float scale, float yawDeg, float t, float alpha)
     {
-        float r = rotDeg * MathF.PI / 180f;
-        float cos = MathF.Cos(r);
-        float sin = MathF.Sin(r);
+        if (alpha <= 0.001f)
+            return;
 
-        Vector3 Rot(Vector3 v)
-        {
-            return new Vector3(v.X * cos - v.Z * sin, v.Y, v.X * sin + v.Z * cos);
-        }
+        float yaw = yawDeg / 28f;
+        float xOffset = yaw * 85f * scale;
+        float widthScale = 1f - MathF.Abs(yaw) * 0.22f;
 
-        float eyePulse = 0.5f + 0.5f * MathF.Sin(_time * 5.0f);
-        float sidePulse = 0.5f + 0.5f * MathF.Sin(_time * 3.0f + 1.2f);
-        var monoEye = Rgba(80, (byte)(150 + eyePulse * 80f), 255, 255);
-        var sideGlow = Rgba(255, (byte)(70 + sidePulse * 100f), 30, 255);
+        float hw = 390f * scale * widthScale;
+        float hh = 430f * scale;
+        float hx = cx - hw * 0.5f + xOffset;
+        float hy = cy - hh * 0.58f;
 
-        // Main helmet + rear shell
-        Raylib.DrawCube(Rot(new Vector3(0, 0.05f, -0.02f)), 2.35f, 2.55f, 1.95f, MetalDk);
-        Raylib.DrawCube(Rot(new Vector3(0, 0.12f, -0.36f)), 1.95f, 2.15f, 1.25f, Rgba(58, 68, 78, 255));
-        Raylib.DrawCubeWires(Rot(new Vector3(0, 0.05f, -0.02f)), 2.35f, 2.55f, 1.95f, Rgba(110, 220, 255, 120));
+        Vector4 metal = new(0.30f, 0.35f, 0.40f, alpha);
+        Vector4 metalDark = new(0.20f, 0.23f, 0.27f, alpha);
 
-        // Crown ridge and side horns
-        Raylib.DrawCube(Rot(new Vector3(0, 1.16f, 0.28f)), 1.5f, 0.22f, 1.05f, MetalLt);
-        Raylib.DrawCube(Rot(new Vector3(-0.96f, 1.08f, 0.10f)), 0.26f, 0.38f, 0.84f, MetalLt);
-        Raylib.DrawCube(Rot(new Vector3(0.96f, 1.08f, 0.10f)), 0.26f, 0.38f, 0.84f, MetalLt);
+        renderer.FillRect(hx, hy, hw, hh, metalDark);
+        renderer.DrawEllipse(hx - 6f * scale, hy - 12f * scale, hw + 12f * scale, hh + 24f * scale, 4f * scale, new Vector4(0.45f, 0.55f, 0.62f, alpha));
 
-        // Mono-eye visor + inner glow band
-        Raylib.DrawCube(Rot(new Vector3(0, 0.34f, 0.94f)), 1.92f, 0.38f, 0.14f, DarkTint);
-        Raylib.DrawCube(Rot(new Vector3(0, 0.34f, 1.01f)), 1.62f, 0.18f, 0.04f, monoEye);
+        renderer.FillRect(hx + hw * 0.1f, hy + hh * 0.18f, hw * 0.8f, hh * 0.15f, new Vector4(0.05f, 0.10f, 0.14f, alpha));
+        float eyePulse = 0.4f + 0.6f * (0.5f + 0.5f * MathF.Sin(t * 5f));
+        renderer.FillRect(hx + hw * 0.16f, hy + hh * 0.23f, hw * 0.68f, hh * 0.05f, new Vector4(0.35f, 0.95f, 1f, alpha * eyePulse));
 
-        // Nose bridge and cheek armor
-        Raylib.DrawCube(Rot(new Vector3(0, 0.00f, 0.99f)), 0.24f, 0.60f, 0.16f, MetalLt);
-        Raylib.DrawCube(Rot(new Vector3(-0.70f, -0.08f, 0.86f)), 0.54f, 0.40f, 0.22f, Rgba(100, 112, 124, 255));
-        Raylib.DrawCube(Rot(new Vector3(0.70f, -0.08f, 0.86f)), 0.54f, 0.40f, 0.22f, Rgba(100, 112, 124, 255));
+        renderer.FillRect(hx + hw * 0.46f, hy + hh * 0.34f, hw * 0.08f, hh * 0.16f, metal);
 
-        // Jaw block with glowing equalizer bars
-        Raylib.DrawCube(Rot(new Vector3(0, -0.78f, 0.64f)), 1.45f, 0.90f, 0.76f, Rgba(62, 74, 86, 255));
+        renderer.FillRect(hx + hw * 0.15f, hy + hh * 0.62f, hw * 0.70f, hh * 0.23f, metal);
         for (int i = 0; i < 7; i++)
         {
-            float x = -0.48f + i * 0.16f;
-            float hBar = 0.12f + 0.10f * (0.5f + 0.5f * MathF.Sin(_time * 4.5f + i * 0.8f));
-            Raylib.DrawCube(Rot(new Vector3(x, -0.80f, 1.03f)), 0.06f, hBar, 0.03f,
-                            Rgba(0, 220, 255, 220));
+            float barH = (0.05f + 0.04f * (0.5f + 0.5f * MathF.Sin(t * 4f + i))) * hh;
+            float bx = hx + hw * 0.24f + i * hw * 0.075f;
+            float by = hy + hh * 0.77f - barH;
+            renderer.FillRect(bx, by, hw * 0.04f, barH, new Vector4(0.1f, 0.9f, 1f, alpha * 0.9f));
         }
 
-        // Side pods / ear modules
-        Raylib.DrawCylinder(Rot(new Vector3(-1.23f, 0.02f, 0.12f)), 0.23f, 0.19f, 0.76f, 12, MetalLt);
-        Raylib.DrawCylinder(Rot(new Vector3(1.23f, 0.02f, 0.12f)), 0.23f, 0.19f, 0.76f, 12, MetalLt);
-        Raylib.DrawSphereEx(Rot(new Vector3(-1.23f, 0.02f, 0.58f)), 0.10f, 8, 8, sideGlow);
-        Raylib.DrawSphereEx(Rot(new Vector3(1.23f, 0.02f, 0.58f)), 0.10f, 8, 8, sideGlow);
+        float sidePulse = 0.5f + 0.5f * MathF.Sin(t * 3.1f + 0.6f);
+        renderer.FillEllipse(hx - 38f * scale, hy + hh * 0.35f, 50f * scale, 100f * scale, metal);
+        renderer.FillEllipse(hx + hw - 12f * scale, hy + hh * 0.35f, 50f * scale, 100f * scale, metal);
+        renderer.FillCircle(hx - 14f * scale, hy + hh * 0.47f, 7f * scale, new Vector4(1f, 0.45f, 0.1f, alpha * sidePulse));
+        renderer.FillCircle(hx + hw + 14f * scale, hy + hh * 0.47f, 7f * scale, new Vector4(1f, 0.45f, 0.1f, alpha * sidePulse));
 
-        // Neck piston + collar
-        Raylib.DrawCylinder(Rot(new Vector3(0, -1.34f, 0)), 0.36f, 0.30f, 0.44f, 12, MetalLt);
-        Raylib.DrawCube(Rot(new Vector3(0, -1.62f, 0.02f)), 1.02f, 0.22f, 0.92f, MetalDk);
+        renderer.FillRect(cx - 70f * scale + xOffset, hy + hh + 8f * scale, 140f * scale, 24f * scale, metalDark);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Chromatic aberration glitch during morph
-    // ─────────────────────────────────────────────────────────────────────────
-    private void DrawGlitch(float t)
+    private static void DrawGlitchStrips(Dx12Renderer renderer, int w, int h, float morphT)
     {
-        // t: 0→1, peak intensity around 0.5
-        float intensity = 4f * t * (1f - t);  // bell curve
-        int numBands = (int)(intensity * 15f);
-        var rand = new Random((int)(_time * 100));
-        var srcRect = new Rectangle(0, 0, _w, -_h);
+        if (morphT <= 0f || morphT >= 1f)
+            return;
 
-        for (int b = 0; b < numBands; b++)
+        float intensity = 4f * morphT * (1f - morphT);
+        int bands = (int)(intensity * 14f);
+        for (int i = 0; i < bands; i++)
         {
-            int y = rand.Next(_h);
-            int h = rand.Next(2, 12);
-            int offset = (int)(intensity * (rand.Next(0, 16) - 8));
-
-            // Red channel shifted right
-            Raylib.DrawTexturePro(_rtRobot.Texture,
-                new Rectangle(0, _h - y - h, _w, h),
-                new Rectangle(offset * 2, y, _w, h),
-                Vector2.Zero, 0f, Rgba(255, 0, 0, 60));
-
-            // Blue channel shifted left
-            Raylib.DrawTexturePro(_rtFemale.Texture,
-                new Rectangle(0, _h - y - h, _w, h),
-                new Rectangle(-offset, y, _w, h),
-                Vector2.Zero, 0f, Rgba(0, 0, 255, 60));
+            int y = i * 67 % h;
+            int bh = 2 + i * 11 % 10;
+            float a = 0.05f + intensity * 0.15f;
+            renderer.FillRect(0, y, w, bh, new Vector4(0.2f, 0.8f, 1f, a));
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Particle burst at start of morph
-    // ─────────────────────────────────────────────────────────────────────────
-    private void BurstParticles()
-    {
-        int cx = _w / 2;
-        int cy = _h / 2;
-        for (int i = 0; i < _particles.Length; i++)
-        {
-            float angle = _rng.NextSingle() * MathF.Tau;
-            float speed = 80f + _rng.NextSingle() * 320f;
-            float life = 0.6f + _rng.NextSingle() * 1.0f;
-            float hue = _rng.NextSingle() * 360f;
-            _particles[i] = new Particle
-            {
-                Pos = new Vector2(cx, cy),
-                Vel = new Vector2(MathF.Cos(angle) * speed, MathF.Sin(angle) * speed - 60f),
-                Col = Raylib.ColorFromHSV(hue, 1f, 1f),
-                Life = life,
-                MaxLife = life,
-            };
-        }
-    }
-
-    private void DrawParticles()
-    {
-        for (int i = 0; i < _particles.Length; i++)
-        {
-            ref var p = ref _particles[i];
-            if (p.Life <= 0f) continue;
-            float a = p.Life / p.MaxLife;
-            byte b = (byte)(a * 255);
-            var c = Rgba(p.Col.R, p.Col.G, p.Col.B, b);
-            float r = 2f + a * 3f;
-            Raylib.DrawCircleV(p.Pos, r, c);
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    private void DrawLabel()
+    private void DrawLabel(Dx12Renderer renderer, int w, int h, float alpha)
     {
         string label = _morphT < 0.5f ? "FEMALE FACE" : "ROBOT FACE";
-        float fadeIn = _morphT < 0.5f ? Math.Clamp(_time / 0.8f, 0f, 1f)
-                                       : Math.Clamp((_morphT - 0.5f) * 4f, 0f, 1f);
-        byte la = (byte)(fadeIn * 200);
-        int fs = 22;
-        int lw = Raylib.MeasureText(label, fs);
-        Raylib.DrawText(label, (_w - lw) / 2, _h - 50, fs,
-                        Rgba(200, 200, 255, la));
+        float fade = _morphT < 0.5f ? Math.Clamp(_time / 0.8f, 0f, 1f) : Math.Clamp((_morphT - 0.5f) * 4f, 0f, 1f);
+        Vector4 c = new(0.8f, 0.85f, 1f, fade * alpha * 0.9f);
+        var m = renderer.MeasureText(label, 28f);
+        renderer.DrawText(label, (w - m.Width) * 0.5f, h - 68f, 28f, c);
     }
 
-    private void DrawScanlines()
+    private static void DrawScanlines(Dx12Renderer renderer, int w, int h)
     {
-        var scanColor = Rgba(0, 0, 0, 55);
-        for (int y = 0; y < _h; y += 2)
-            Raylib.DrawRectangle(0, y, _w, 1, scanColor);
+        Vector4 c = new(0f, 0f, 0f, 0.2f);
+        for (int y = 0; y < h; y += 2)
+            renderer.FillRect(0, y, w, 1, c);
     }
 
-    private void EnsureRenderTextureSize()
-    {
-        int w = Raylib.GetScreenWidth();
-        int h = Raylib.GetScreenHeight();
-
-        if (w <= 0 || h <= 0)
-            return;
-
-        if (w == _w && h == _h)
-            return;
-
-        Raylib.UnloadRenderTexture(_rtFemale);
-        Raylib.UnloadRenderTexture(_rtRobot);
-
-        _rtFemale = Raylib.LoadRenderTexture(w, h);
-        _rtRobot = Raylib.LoadRenderTexture(w, h);
-
-        _w = w;
-        _h = h;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
     public void Dispose()
     {
-        Raylib.UnloadRenderTexture(_rtFemale);
-        Raylib.UnloadRenderTexture(_rtRobot);
     }
 }

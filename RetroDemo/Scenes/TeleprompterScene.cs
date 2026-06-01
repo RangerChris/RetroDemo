@@ -1,38 +1,28 @@
 using System.Numerics;
-using Raylib_cs;
-using static RetroDemo.ColorHelper;
 
 namespace RetroDemo.Scenes;
 
-/// <summary>
-/// Classic Amiga teleprompter scene with copper-bar header, typewriter text and
-/// a full-screen scanline overlay for that authentic retro feel.
-/// </summary>
 public sealed class TeleprompterScene : IScene
 {
-    // ── messages ──────────────────────────────────────────────────────────────
     private static readonly string[] Messages =
     [
         "WELCOME TO RETRO DEMO",
-        "CREATED BY ONE OR MORE MACHINES",
+        "DIRECTX 12 MIGRATION COMPLETE",
     ];
 
-    // ── timing ────────────────────────────────────────────────────────────────
-    private const float TypeSpeed = 18f;   // chars per second
-    private const float HoldDuration = 2.4f;  // seconds to hold full message
-    private const float FadeDuration = 0.8f;  // seconds to fade in/out
+    private const float TypeSpeed = 18f;
+    private const float HoldDuration = 2.3f;
+    private const float FadeDuration = 0.7f;
+    private const int CopperHeight = 52;
 
     private enum Phase { FadeIn, Typing, Hold, FadeOut, Done }
 
     private Phase _phase = Phase.FadeIn;
-    private int _msgIndex = 0;
-    private float _phaseTime = 0f;
-    private float _totalTime = 0f;
-    private float _alpha = 0f;
-    private int _visChars = 0;
-
-    // ── copper bars ───────────────────────────────────────────────────────────
-    private const int CopperHeight = 48;
+    private int _msgIndex;
+    private float _phaseTime;
+    private float _totalTime;
+    private float _alpha;
+    private int _visibleChars;
 
     public TeleprompterScene(int screenWidth, int screenHeight)
     {
@@ -40,11 +30,10 @@ public sealed class TeleprompterScene : IScene
         _ = screenHeight;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    public bool Update(float dt)
+    public bool Update(float deltaTime)
     {
-        _totalTime += dt;
-        _phaseTime += dt;
+        _totalTime += deltaTime;
+        _phaseTime += deltaTime;
 
         switch (_phase)
         {
@@ -54,17 +43,17 @@ public sealed class TeleprompterScene : IScene
                 {
                     _phase = Phase.Typing;
                     _phaseTime = 0f;
-                    _visChars = 0;
+                    _visibleChars = 0;
                 }
                 break;
 
             case Phase.Typing:
                 _alpha = 1f;
-                _visChars = (int)(_phaseTime * TypeSpeed);
+                _visibleChars = (int)(_phaseTime * TypeSpeed);
                 int maxChars = Messages[_msgIndex].Length;
-                if (_visChars >= maxChars)
+                if (_visibleChars >= maxChars)
                 {
-                    _visChars = maxChars;
+                    _visibleChars = maxChars;
                     _phase = Phase.Hold;
                     _phaseTime = 0f;
                 }
@@ -92,7 +81,7 @@ public sealed class TeleprompterScene : IScene
                     {
                         _phase = Phase.FadeIn;
                         _phaseTime = 0f;
-                        _visChars = 0;
+                        _visibleChars = 0;
                     }
                 }
                 break;
@@ -100,97 +89,100 @@ public sealed class TeleprompterScene : IScene
             case Phase.Done:
                 return true;
         }
+
         return false;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    public void Draw()
+    public void Draw(Dx12Renderer renderer)
     {
-        int w = Raylib.GetScreenWidth();
-        int h = Raylib.GetScreenHeight();
+        int w = renderer.Width;
+        int h = renderer.Height;
 
-        // ── background ────────────────────────────────────────────────────────
-        Raylib.ClearBackground(Color.Black);
+        renderer.Clear(new Vector4(0.02f, 0.02f, 0.035f, 1f));
+        renderer.BeginOverlay();
 
-        // ── copper-bar header & footer ────────────────────────────────────────
-        DrawCopperBars(0, CopperHeight, w);
-        DrawCopperBars(h - CopperHeight, CopperHeight, w);
+        DrawCopperBars(renderer, 0, CopperHeight, w);
+        DrawCopperBars(renderer, h - CopperHeight, CopperHeight, w);
 
-        // ── centre message ────────────────────────────────────────────────────
-        if (_phase != Phase.Done && _alpha > 0f)
+        if (_phase != Phase.Done)
         {
             string msg = Messages[_msgIndex];
-            string shown = msg[..Math.Clamp(_visChars, 0, msg.Length)];
+            string shown = msg[..Math.Clamp(_visibleChars, 0, msg.Length)];
 
-            int fontSize = w / 24;  // Scales with window width
-            int textW = Raylib.MeasureText(shown, fontSize);
-            int textX = (w - textW) / 2;
-            int textY = (h - fontSize) / 2;
+            float fontSize = Math.Max(22f, w / 24f);
+            var size = renderer.MeasureText(shown, fontSize);
+            float textX = (w - size.Width) * 0.5f;
+            float textY = (h - fontSize) * 0.5f;
 
-            // Glow shadow
-            byte glowAlpha = (byte)(_alpha * 80);
+            Vector4 glow = new(1f, 0.6f, 0.2f, _alpha * 0.35f);
+            Vector4 main = new(1f, 0.85f, 0.26f, _alpha);
+
             for (int d = 4; d >= 1; d--)
             {
-                var glow = Rgba(255, 160, 0, glowAlpha);
-                Raylib.DrawText(shown, textX - d, textY + d, fontSize, glow);
-                Raylib.DrawText(shown, textX + d, textY + d, fontSize, glow);
+                renderer.DrawText(shown, textX - d, textY + d, fontSize, glow);
+                renderer.DrawText(shown, textX + d, textY + d, fontSize, glow);
             }
 
-            // Main text – warm amber/gold, classic Amiga colour
-            byte mainAlpha = (byte)(_alpha * 255);
-            var mainColor = Rgba(255, 210, 60, mainAlpha);
-            Raylib.DrawText(shown, textX, textY, fontSize, mainColor);
+            renderer.DrawText(shown, textX, textY, fontSize, main);
 
-            // Cursor blink while typing
-            if (_phase == Phase.Typing)
+            if (_phase == Phase.Typing && ((int)(_totalTime * 2f) % 2 == 0))
             {
-                bool blink = (int)(_totalTime * 2f) % 2 == 0;
-                if (blink)
-                {
-                    int cursorX = textX + textW + 4;
-                    Raylib.DrawRectangle(cursorX, textY, fontSize / 2, fontSize, mainColor);
-                }
+                float cursorX = textX + size.Width + 6f;
+                renderer.FillRect(cursorX, textY, fontSize * 0.45f, fontSize, main);
             }
 
-            // Sub-title decoration lines
-            int lineY1 = textY - 20;
-            int lineY2 = textY + fontSize + 14;
-            byte lineA = (byte)(_alpha * 200);
-            var lineC = Rgba(255, 160, 0, lineA);
-            Raylib.DrawLine(textX, lineY1, textX + textW, lineY1, lineC);
-            Raylib.DrawLine(textX, lineY2, textX + textW, lineY2, lineC);
+            float topLineY = textY - 20f;
+            float bottomLineY = textY + fontSize + 14f;
+            Vector4 lineColor = new(1f, 0.65f, 0.2f, _alpha * 0.8f);
+            renderer.DrawLine(textX, topLineY, textX + size.Width, topLineY, 2f, lineColor);
+            renderer.DrawLine(textX, bottomLineY, textX + size.Width, bottomLineY, 2f, lineColor);
         }
 
-        // ── scanline overlay ──────────────────────────────────────────────────
-        DrawScanlines(w, h);
+        DrawScanlines(renderer, w, h);
+        renderer.EndOverlay();
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    private void DrawCopperBars(int startY, int height, int w)
+    private void DrawCopperBars(Dx12Renderer renderer, int startY, int height, int width)
     {
         for (int row = 0; row < height; row++)
         {
-            // Each row gets a hue derived from position + time
             float t = _totalTime;
-            float hue = ((row * 360f / height) + t * 80f) % 360f;
-            float brightness = 0.55f + 0.45f * MathF.Sin(row * MathF.PI / height);
-            var color = Raylib.ColorFromHSV(hue, 1f, brightness);
-            Raylib.DrawRectangle(0, startY + row, w, 1, color);
+            float hue = ((row * 360f / height) + t * 85f) % 360f;
+            Vector4 c = HsvToRgb(hue, 1f, 0.55f + 0.45f * MathF.Sin(row * MathF.PI / height));
+            renderer.FillRect(0, startY + row, width, 1, c);
         }
 
-        // Highlight edge line
-        var white = Rgba(255, 255, 255, 120);
-        Raylib.DrawRectangle(0, startY, w, 2, white);
-        Raylib.DrawRectangle(0, startY + height - 2, w, 2, white);
+        Vector4 edge = new(1f, 1f, 1f, 0.5f);
+        renderer.FillRect(0, startY, width, 2, edge);
+        renderer.FillRect(0, startY + height - 2, width, 2, edge);
     }
 
-    private void DrawScanlines(int w, int h)
+    private static void DrawScanlines(Dx12Renderer renderer, int w, int h)
     {
-        var scanColor = Rgba(0, 0, 0, 80);
+        Vector4 scan = new(0f, 0f, 0f, 0.23f);
         for (int y = 0; y < h; y += 2)
-            Raylib.DrawRectangle(0, y, w, 1, scanColor);
+            renderer.FillRect(0, y, w, 1, scan);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    public void Dispose() { /* nothing to unload */ }
+    private static Vector4 HsvToRgb(float h, float s, float v)
+    {
+        float c = v * s;
+        float x = c * (1 - MathF.Abs((h / 60f % 2) - 1));
+        float m = v - c;
+
+        float r = 0, g = 0, b = 0;
+
+        if (h < 60f) { r = c; g = x; }
+        else if (h < 120f) { r = x; g = c; }
+        else if (h < 180f) { g = c; b = x; }
+        else if (h < 240f) { g = x; b = c; }
+        else if (h < 300f) { r = x; b = c; }
+        else { r = c; b = x; }
+
+        return new Vector4(r + m, g + m, b + m, 1f);
+    }
+
+    public void Dispose()
+    {
+    }
 }

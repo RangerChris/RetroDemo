@@ -10,16 +10,16 @@ namespace RetroDemo.Scenes;
 /// </summary>
 public sealed class SinusScene : IScene
 {
-    private readonly int _w;
-    private readonly int _h;
+    private int _w;
+    private int _h;
 
     // ── effects ───────────────────────────────────────────────────────────────
-    private const int  EffectCount    = 10;
+    private const int EffectCount = 10;
     private const float EffectDuration = 5.0f;   // seconds per effect
-    private const float FadeTime       = 0.6f;   // crossfade overlap
+    private const float FadeTime = 0.6f;   // crossfade overlap
 
-    private float _time       = 0f;
-    private int   _effectIdx  = 0;
+    private float _time = 0f;
+    private int _effectIdx = 0;
     private float _effectTime = 0f;
 
     // ── low-res plasma buffer (classic 320×200 Amiga resolution) ──────────────
@@ -39,8 +39,8 @@ public sealed class SinusScene : IScene
     // ── lissajous trail ───────────────────────────────────────────────────────
     private const int TrailLen = 1200;
     private readonly Vector2[] _trail = new Vector2[TrailLen];
-    private int   _trailHead  = 0;
-    private float _lissT      = 0f;
+    private int _trailHead = 0;
+    private float _lissT = 0f;
 
     // ── tunnel ────────────────────────────────────────────────────────────────
     private RenderTexture2D _tunnelRT;
@@ -56,15 +56,15 @@ public sealed class SinusScene : IScene
 
     private float _scrollX;
     private const int ScrollFontSize = 42;
-    private const int ScrollYBase    = 0;   // offset from bottom — computed on draw
+    private const int ScrollYBase = 0;   // offset from bottom — computed on draw
 
     // ── camera for 3-D effects ────────────────────────────────────────────────
     private Camera3D _cam3d = new()
     {
-        Position   = new Vector3(0, 12f, 0.1f),
-        Target     = Vector3.Zero,
-        Up         = Vector3.UnitZ,
-        FovY       = 50f,
+        Position = new Vector3(0, 12f, 0.1f),
+        Target = Vector3.Zero,
+        Up = Vector3.UnitZ,
+        FovY = 50f,
         Projection = CameraProjection.Perspective,
     };
 
@@ -74,8 +74,8 @@ public sealed class SinusScene : IScene
         _w = w;
         _h = h;
 
-        _plasma   = Raylib.LoadRenderTexture(LW, LH);
-        _bobRT    = Raylib.LoadRenderTexture(w, h);
+        _plasma = Raylib.LoadRenderTexture(LW, LH);
+        _bobRT = Raylib.LoadRenderTexture(w, h);
         _tunnelRT = Raylib.LoadRenderTexture(LW, LH);
 
         // Initialise stars
@@ -96,7 +96,9 @@ public sealed class SinusScene : IScene
     // ─────────────────────────────────────────────────────────────────────────
     public bool Update(float dt)
     {
-        _time       += dt;
+        EnsureRenderTargetSize();
+
+        _time += dt;
         _effectTime += dt;
 
         if (_effectTime >= EffectDuration)
@@ -140,12 +142,14 @@ public sealed class SinusScene : IScene
     // ─────────────────────────────────────────────────────────────────────────
     public void Draw()
     {
+        EnsureRenderTargetSize();
+
         float et = _effectTime;   // time within current effect
-        float t  = _time;
+        float t = _time;
 
         // Fade between effects
         float alpha = 1f;
-        if (et < FadeTime)       alpha = et / FadeTime;
+        if (et < FadeTime) alpha = et / FadeTime;
         else if (et > EffectDuration - FadeTime)
             alpha = (EffectDuration - et) / FadeTime;
 
@@ -153,16 +157,16 @@ public sealed class SinusScene : IScene
 
         switch (_effectIdx)
         {
-            case 0: DrawMultiWaves(t, alpha);       break;
-            case 1: DrawPlasma(t, alpha);            break;
-            case 2: DrawCopperBars(t, alpha);        break;
-            case 3: DrawStarfield(t, alpha);         break;
-            case 4: DrawBobs(t, alpha);              break;
-            case 5: DrawSineLandscape(t, alpha);     break;
-            case 6: DrawLissajous(t, alpha);         break;
-            case 7: DrawTunnel(t, alpha);            break;
-            case 8: DrawInterference(t, alpha);      break;
-            case 9: DrawDotRotator(t, alpha);        break;
+            case 0: DrawMultiWaves(t, alpha); break;
+            case 1: DrawPlasma(t, alpha); break;
+            case 2: DrawCopperBars(t, alpha); break;
+            case 3: DrawStarfield(t, alpha); break;
+            case 4: DrawBobs(t, alpha); break;
+            case 5: DrawSineLandscape(t, alpha); break;
+            case 6: DrawLissajous(t, alpha); break;
+            case 7: DrawTunnel(t, alpha); break;
+            case 8: DrawInterference(t, alpha); break;
+            case 9: DrawDotRotator(t, alpha); break;
             default: Raylib.ClearBackground(Color.Black); break;
         }
 
@@ -181,8 +185,8 @@ public sealed class SinusScene : IScene
         Raylib.ClearBackground(Rgba(5, 0, 20, 255));
 
         int scrollH = ScrollFontSize + 20;
-        int drawH   = _h - scrollH;
-        float cy    = drawH / 2f;
+        int drawH = _h - scrollH;
+        float cy = drawH / 2f;
 
         // 6 waves with different params
         (float freq, float amp, float speed, float hue)[] waves =
@@ -198,8 +202,8 @@ public sealed class SinusScene : IScene
         foreach (var (freq, amp, speed, baseHue) in waves)
         {
             float hue = (baseHue + t * 40f) % 360f;
-            byte  a   = (byte)(alpha * 220);
-            var   c   = Raylib.ColorFromHSV(hue, 1f, 1f);
+            byte a = (byte)(alpha * 220);
+            var c = Raylib.ColorFromHSV(hue, 1f, 1f);
             c = Rgba(c.R, c.G, c.B, a);
 
             for (int x = 0; x < _w - 1; x++)
@@ -221,15 +225,15 @@ public sealed class SinusScene : IScene
         Raylib.ClearBackground(Color.Black);
 
         for (int py = 0; py < LH; py++)
-        for (int px = 0; px < LW; px++)
-        {
-            float v = MathF.Sin(px * 0.06f + t * 1.5f)
-                    + MathF.Sin(py * 0.05f + t * 1.2f)
-                    + MathF.Sin((px + py) * 0.04f + t)
-                    + MathF.Sin(MathF.Sqrt(px * px + py * py) * 0.07f - t * 2f);
-            float hue = ((v + 4f) / 8f * 360f + t * 60f) % 360f;
-            Raylib.DrawPixel(px, py, Raylib.ColorFromHSV(hue, 1f, 1f));
-        }
+            for (int px = 0; px < LW; px++)
+            {
+                float v = MathF.Sin(px * 0.06f + t * 1.5f)
+                        + MathF.Sin(py * 0.05f + t * 1.2f)
+                        + MathF.Sin((px + py) * 0.04f + t)
+                        + MathF.Sin(MathF.Sqrt(px * px + py * py) * 0.07f - t * 2f);
+                float hue = ((v + 4f) / 8f * 360f + t * 60f) % 360f;
+                Raylib.DrawPixel(px, py, Raylib.ColorFromHSV(hue, 1f, 1f));
+            }
 
         Raylib.EndTextureMode();
 
@@ -250,21 +254,21 @@ public sealed class SinusScene : IScene
         Raylib.ClearBackground(Color.Black);
 
         int scrollH = ScrollFontSize + 20;
-        int drawH   = _h - scrollH;
+        int drawH = _h - scrollH;
 
         // 8 copper-bar groups
         for (int b = 0; b < 8; b++)
         {
             float sinPhase = t * (1.0f + b * 0.15f) + b * MathF.PI * 0.4f;
-            int barCenter  = (int)(drawH / 2f + (drawH * 0.38f) * MathF.Sin(sinPhase));
-            int barHeight  = 40 + (int)(20 * MathF.Abs(MathF.Sin(t * 0.7f + b)));
-            float baseHue  = (b * 45f + t * 50f) % 360f;
+            int barCenter = (int)(drawH / 2f + (drawH * 0.38f) * MathF.Sin(sinPhase));
+            int barHeight = 40 + (int)(20 * MathF.Abs(MathF.Sin(t * 0.7f + b)));
+            float baseHue = (b * 45f + t * 50f) % 360f;
 
             for (int row = 0; row < barHeight; row++)
             {
                 int y = barCenter - barHeight / 2 + row;
                 if (y < 0 || y >= drawH) continue;
-                float f   = row / (float)barHeight;
+                float f = row / (float)barHeight;
                 float hue = (baseHue + f * 90f) % 360f;
                 float bri = 0.4f + 0.6f * MathF.Sin(f * MathF.PI);
                 var c = Raylib.ColorFromHSV(hue, 1f, bri);
@@ -276,7 +280,7 @@ public sealed class SinusScene : IScene
         // Centered label
         string lbl = "COPPER BARS";
         int lfs = 24;
-        int lw  = Raylib.MeasureText(lbl, lfs);
+        int lw = Raylib.MeasureText(lbl, lfs);
         byte la = (byte)(alpha * 180);
         Raylib.DrawText(lbl, (_w - lw) / 2, drawH / 2 - lfs / 2, lfs,
                         Rgba(255, 255, 255, la));
@@ -289,7 +293,7 @@ public sealed class SinusScene : IScene
     {
         Raylib.ClearBackground(Color.Black);
         int scrollH = ScrollFontSize + 20;
-        int drawH   = _h - scrollH;
+        int drawH = _h - scrollH;
         float cx = _w / 2f, cy = drawH / 2f;
 
         foreach (var s in _stars)
@@ -302,7 +306,7 @@ public sealed class SinusScene : IScene
 
             float brightness = 1f - s.Z;
             float r2 = Math.Max(1f, (1f - s.Z) * 3.5f);
-            byte  sb = (byte)(brightness * alpha * 255);
+            byte sb = (byte)(brightness * alpha * 255);
             // Colour based on depth
             float hue = (s.Z * 200f + 180f) % 360f;
             var sc = Raylib.ColorFromHSV(hue, 0.3f + brightness * 0.7f, 1f);
@@ -316,7 +320,7 @@ public sealed class SinusScene : IScene
     private void DrawBobs(float t, float alpha)
     {
         int scrollH = ScrollFontSize + 20;
-        int drawH   = _h - scrollH;
+        int drawH = _h - scrollH;
 
         // Render bobs to their own RT with additive blend for glow
         Raylib.BeginTextureMode(_bobRT);
@@ -326,8 +330,8 @@ public sealed class SinusScene : IScene
         for (int b = 0; b < BobCount; b++)
         {
             float phase = b * MathF.Tau / BobCount;
-            float ax    = 0.85f + 0.1f * MathF.Sin(t * 0.3f + phase);
-            float ay    = 0.75f + 0.1f * MathF.Cos(t * 0.4f + phase);
+            float ax = 0.85f + 0.1f * MathF.Sin(t * 0.3f + phase);
+            float ay = 0.75f + 0.1f * MathF.Cos(t * 0.4f + phase);
             float bx = _w / 2f + ax * (_w * 0.4f)
                          * MathF.Sin(t * (0.8f + b * 0.07f) + phase);
             float by = drawH / 2f + ay * (drawH * 0.35f)
@@ -366,12 +370,16 @@ public sealed class SinusScene : IScene
         int cols = 40, rows = 30;
         float cellW = 2.2f, cellD = 2.2f;
         float originX = -cols / 2f * cellW;
-        float originZ = -rows / 2f * cellD + t * 4f;  // camera scroll
 
-        _cam3d.Position = new Vector3(0, 14f, 5f);
-        _cam3d.Target   = new Vector3(0, 0, 0);
-        _cam3d.Up       = Vector3.UnitY;
-        _cam3d.FovY     = 50f;
+        // Use local effect time so the landscape does not scroll out of view
+        // before this effect is reached in the sequence.
+        float localT = _effectTime;
+        float originZ = -rows / 2f * cellD + localT * 4f;
+
+        _cam3d.Position = new Vector3(0, 13f, 18f);
+        _cam3d.Target = new Vector3(0, 0, -8f);
+        _cam3d.Up = Vector3.UnitY;
+        _cam3d.FovY = 50f;
 
         // Scissor to leave scroller area
         // Draw full then overdraw scroller area
@@ -379,38 +387,38 @@ public sealed class SinusScene : IScene
 
         // Draw grid rows
         for (int rr = 0; rr < rows; rr++)
-        for (int cc = 0; cc < cols; cc++)
-        {
-            float x0 = originX + cc * cellW;
-            float z0 = originZ + rr * cellD;
-            float x1 = x0 + cellW;
-            float z1 = z0 + cellD;
-
-            float GetHeight(float x, float z)
+            for (int cc = 0; cc < cols; cc++)
             {
-                return 1.5f * MathF.Sin(x * 0.4f + t * 1.2f)
-                     + 1.0f * MathF.Cos(z * 0.3f + t * 0.9f)
-                     + 0.8f * MathF.Sin((x + z) * 0.25f + t * 1.5f);
+                float x0 = originX + cc * cellW;
+                float z0 = originZ + rr * cellD;
+                float x1 = x0 + cellW;
+                float z1 = z0 + cellD;
+
+                float GetHeight(float x, float z)
+                {
+                    return 1.5f * MathF.Sin(x * 0.4f + t * 1.2f)
+                         + 1.0f * MathF.Cos(z * 0.3f + t * 0.9f)
+                         + 0.8f * MathF.Sin((x + z) * 0.25f + t * 1.5f);
+                }
+
+                float h00 = GetHeight(x0, z0);
+                float h10 = GetHeight(x1, z0);
+                float h01 = GetHeight(x0, z1);
+
+                float dist = MathF.Sqrt(x0 * x0 + z0 * z0) * 0.05f;
+                float hue = ((h00 + 3f) / 6f * 240f + 180f + t * 30f) % 360f;
+                float bri = Math.Clamp(1f - dist * 0.15f, 0.2f, 1f);
+                var c = Raylib.ColorFromHSV(hue, 1f, bri);
+                byte ca = (byte)(alpha * 255);
+                c = Rgba(c.R, c.G, c.B, ca);
+
+                var p00 = new Vector3(x0, h00, z0);
+                var p10 = new Vector3(x1, h10, z0);
+                var p01 = new Vector3(x0, h01, z1);
+
+                Raylib.DrawLine3D(p00, p10, c);
+                Raylib.DrawLine3D(p00, p01, c);
             }
-
-            float h00 = GetHeight(x0, z0);
-            float h10 = GetHeight(x1, z0);
-            float h01 = GetHeight(x0, z1);
-
-            float dist = MathF.Sqrt(x0 * x0 + z0 * z0) * 0.05f;
-            float hue  = ((h00 + 3f) / 6f * 240f + 180f + t * 30f) % 360f;
-            float bri  = Math.Clamp(1f - dist * 0.15f, 0.2f, 1f);
-            var c = Raylib.ColorFromHSV(hue, 1f, bri);
-            byte ca = (byte)(alpha * 255);
-            c = Rgba(c.R, c.G, c.B, ca);
-
-            var p00 = new Vector3(x0, h00, z0);
-            var p10 = new Vector3(x1, h10, z0);
-            var p01 = new Vector3(x0, h01, z1);
-
-            Raylib.DrawLine3D(p00, p10, c);
-            Raylib.DrawLine3D(p00, p01, c);
-        }
 
         Raylib.EndMode3D();
     }
@@ -423,7 +431,7 @@ public sealed class SinusScene : IScene
         Raylib.ClearBackground(Rgba(0, 0, 20, 255));
 
         int scrollH = ScrollFontSize + 20;
-        int drawH   = _h - scrollH;
+        int drawH = _h - scrollH;
         float cx = _w / 2f, cy = drawH / 2f;
         float rx = _w * 0.42f, ry = drawH * 0.42f;
 
@@ -440,14 +448,14 @@ public sealed class SinusScene : IScene
         // Draw trail with fading colour
         for (int i = 0; i < TrailLen - 1; i++)
         {
-            int  idx0 = (_trailHead + i)       % TrailLen;
-            int  idx1 = (_trailHead + i + 1)   % TrailLen;
+            int idx0 = (_trailHead + i) % TrailLen;
+            int idx1 = (_trailHead + i + 1) % TrailLen;
             if (_trail[idx0] == Vector2.Zero) continue;
 
             float ageF = i / (float)TrailLen;
-            float hue  = (ageF * 360f + t * 80f) % 360f;
-            byte  ba   = (byte)(ageF * alpha * 180f);
-            var   col  = Raylib.ColorFromHSV(hue, 1f, 1f);
+            float hue = (ageF * 360f + t * 80f) % 360f;
+            byte ba = (byte)(ageF * alpha * 180f);
+            var col = Raylib.ColorFromHSV(hue, 1f, 1f);
             Raylib.DrawLineEx(_trail[idx0], _trail[idx1], 1.5f,
                               Rgba(col.R, col.G, col.B, ba));
         }
@@ -467,26 +475,26 @@ public sealed class SinusScene : IScene
         Raylib.ClearBackground(Color.Black);
 
         for (int py = 0; py < LH; py++)
-        for (int px = 0; px < LW; px++)
-        {
-            float fx = (px / (float)LW - 0.5f) * 2f;
-            float fy = (py / (float)LH - 0.5f) * 2f;
+            for (int px = 0; px < LW; px++)
+            {
+                float fx = (px / (float)LW - 0.5f) * 2f;
+                float fy = (py / (float)LH - 0.5f) * 2f;
 
-            // Add sine wobble to the tunnel centre
-            float cx2 = 0.2f * MathF.Sin(t * 0.7f);
-            float cy2 = 0.2f * MathF.Cos(t * 0.5f);
-            float dx = fx - cx2, dy = fy - cy2;
+                // Add sine wobble to the tunnel centre
+                float cx2 = 0.2f * MathF.Sin(t * 0.7f);
+                float cy2 = 0.2f * MathF.Cos(t * 0.5f);
+                float dx = fx - cx2, dy = fy - cy2;
 
-            float dist = MathF.Sqrt(dx * dx + dy * dy) + 0.001f;
-            float angle = MathF.Atan2(dy, dx);
+                float dist = MathF.Sqrt(dx * dx + dy * dy) + 0.001f;
+                float angle = MathF.Atan2(dy, dx);
 
-            float u = (angle / MathF.PI + t * 0.5f) % 1f;
-            float v = (1f / dist + t) % 1f;
+                float u = (angle / MathF.PI + t * 0.5f) % 1f;
+                float v = (1f / dist + t) % 1f;
 
-            float hue = ((u + v * 0.3f) * 360f) % 360f;
-            float bri = Math.Clamp(1f - dist * 0.3f, 0.1f, 1f);
-            Raylib.DrawPixel(px, py, Raylib.ColorFromHSV(hue, 1f, bri));
-        }
+                float hue = ((u + v * 0.3f) * 360f) % 360f;
+                float bri = Math.Clamp(1f - dist * 0.3f, 0.1f, 1f);
+                Raylib.DrawPixel(px, py, Raylib.ColorFromHSV(hue, 1f, bri));
+            }
 
         Raylib.EndTextureMode();
 
@@ -506,26 +514,26 @@ public sealed class SinusScene : IScene
         Raylib.ClearBackground(Color.Black);
 
         int scrollH = ScrollFontSize + 20;
-        int drawH   = _h - scrollH;
+        int drawH = _h - scrollH;
 
         // Two moving ring centres
         float cx1 = _w * (0.35f + 0.12f * MathF.Sin(t * 0.6f));
-        float cy1 = drawH * (0.5f  + 0.15f * MathF.Cos(t * 0.7f));
+        float cy1 = drawH * (0.5f + 0.15f * MathF.Cos(t * 0.7f));
         float cx2 = _w * (0.65f + 0.12f * MathF.Cos(t * 0.8f));
-        float cy2 = drawH * (0.5f  - 0.15f * MathF.Sin(t * 0.5f));
+        float cy2 = drawH * (0.5f - 0.15f * MathF.Sin(t * 0.5f));
 
         int maxR = (int)(MathF.Sqrt(_w * _w + drawH * drawH) / 2) + 40;
 
         for (int r = 4; r < maxR; r += 8)
         {
-            float t1   = r / 30f - t * 2.5f;
-            float t2   = r / 25f - t * 2.0f;
+            float t1 = r / 30f - t * 2.5f;
+            float t2 = r / 25f - t * 2.0f;
             float wave = 0.5f + 0.5f * (MathF.Sin(t1) * MathF.Sin(t2));
             if (wave < 0.5f) continue;  // Only draw bright fringes
 
             float hue = ((r * 1.5f + t * 60f)) % 360f;
-            byte  ba  = (byte)(wave * alpha * 200f);
-            var   c   = Raylib.ColorFromHSV(hue, 1f, 1f);
+            byte ba = (byte)(wave * alpha * 200f);
+            var c = Raylib.ColorFromHSV(hue, 1f, 1f);
 
             Raylib.DrawRing(new Vector2(cx1, cy1), r - 2, r + 2,
                             0, 360, 60, Rgba(c.R, c.G, c.B, ba));
@@ -542,7 +550,7 @@ public sealed class SinusScene : IScene
         Raylib.ClearBackground(Rgba(0, 0, 15, 255));
 
         int scrollH = ScrollFontSize + 20;
-        int drawH   = _h - scrollH;
+        int drawH = _h - scrollH;
         float cx = _w / 2f, cy = drawH / 2f;
 
         int torusU = 28, torusV = 18;
@@ -552,42 +560,42 @@ public sealed class SinusScene : IScene
         float rotY = t * 0.7f;
 
         for (int u = 0; u < torusU; u++)
-        for (int v = 0; v < torusV; v++)
-        {
-            float au = u * MathF.Tau / torusU;
-            float av = v * MathF.Tau / torusV;
+            for (int v = 0; v < torusV; v++)
+            {
+                float au = u * MathF.Tau / torusU;
+                float av = v * MathF.Tau / torusV;
 
-            // Sine displacement ripple
-            float disp = 12f * MathF.Sin(au * 3f + t * 2.5f)
-                               * MathF.Cos(av * 2f + t * 1.8f);
+                // Sine displacement ripple
+                float disp = 12f * MathF.Sin(au * 3f + t * 2.5f)
+                                   * MathF.Cos(av * 2f + t * 1.8f);
 
-            float x3 = (R + r2 * MathF.Cos(av) + disp) * MathF.Cos(au);
-            float y3 = (R + r2 * MathF.Cos(av) + disp) * MathF.Sin(au);
-            float z3 = r2 * MathF.Sin(av);
+                float x3 = (R + r2 * MathF.Cos(av) + disp) * MathF.Cos(au);
+                float y3 = (R + r2 * MathF.Cos(av) + disp) * MathF.Sin(au);
+                float z3 = r2 * MathF.Sin(av);
 
-            // Rotate X
-            float y4 = y3 * MathF.Cos(rotX) - z3 * MathF.Sin(rotX);
-            float z4 = y3 * MathF.Sin(rotX) + z3 * MathF.Cos(rotX);
+                // Rotate X
+                float y4 = y3 * MathF.Cos(rotX) - z3 * MathF.Sin(rotX);
+                float z4 = y3 * MathF.Sin(rotX) + z3 * MathF.Cos(rotX);
 
-            // Rotate Y
-            float x5 = x3 * MathF.Cos(rotY) + z4 * MathF.Sin(rotY);
-            float z5 = -x3 * MathF.Sin(rotY) + z4 * MathF.Cos(rotY);
+                // Rotate Y
+                float x5 = x3 * MathF.Cos(rotY) + z4 * MathF.Sin(rotY);
+                float z5 = -x3 * MathF.Sin(rotY) + z4 * MathF.Cos(rotY);
 
-            float depth = 600f;
-            float pz    = z5 + depth;
-            if (pz <= 0.01f) continue;
+                float depth = 600f;
+                float pz = z5 + depth;
+                if (pz <= 0.01f) continue;
 
-            float px = cx + x5 * depth / pz;
-            float py = cy + y4 * depth / pz;
+                float px = cx + x5 * depth / pz;
+                float py = cy + y4 * depth / pz;
 
-            float bright = Math.Clamp((z5 + r2 + R) / (2 * (R + r2)), 0.2f, 1f);
-            float hue    = (au * 180f / MathF.PI + t * 50f + v * 15f) % 360f;
-            var   c      = Raylib.ColorFromHSV(hue, 1f, bright);
-            byte  ba     = (byte)(alpha * 255 * bright);
-            float dotR   = Math.Max(1.5f, (depth / pz) * 3.5f);
+                float bright = Math.Clamp((z5 + r2 + R) / (2 * (R + r2)), 0.2f, 1f);
+                float hue = (au * 180f / MathF.PI + t * 50f + v * 15f) % 360f;
+                var c = Raylib.ColorFromHSV(hue, 1f, bright);
+                byte ba = (byte)(alpha * 255 * bright);
+                float dotR = Math.Max(1.5f, (depth / pz) * 3.5f);
 
-            Raylib.DrawCircleV(new Vector2(px, py), dotR, Rgba(c.R, c.G, c.B, ba));
-        }
+                Raylib.DrawCircleV(new Vector2(px, py), dotR, Rgba(c.R, c.G, c.B, ba));
+            }
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -596,7 +604,7 @@ public sealed class SinusScene : IScene
     private void DrawScrollerBar()
     {
         int scrollH = ScrollFontSize + 20;
-        int barY    = _h - scrollH;
+        int barY = _h - scrollH;
 
         // Background bar with gradient
         for (int row = 0; row < scrollH; row++)
@@ -662,8 +670,8 @@ public sealed class SinusScene : IScene
     private void DrawEffectLabel(int idx, float alpha)
     {
         if (idx >= EffectNames.Length) return;
-        int   fs = 18;
-        byte  ba = (byte)(Math.Clamp(alpha * 1.5f, 0f, 1f) * 160);
+        int fs = 18;
+        byte ba = (byte)(Math.Clamp(alpha * 1.5f, 0f, 1f) * 160);
         Raylib.DrawText(EffectNames[idx], 12, 10, fs, Rgba(255, 255, 200, ba));
     }
 
@@ -672,6 +680,24 @@ public sealed class SinusScene : IScene
         var sc = Rgba(0, 0, 0, 50);
         for (int y = 0; y < _h; y += 2)
             Raylib.DrawRectangle(0, y, _w, 1, sc);
+    }
+
+    private void EnsureRenderTargetSize()
+    {
+        int w = Raylib.GetScreenWidth();
+        int h = Raylib.GetScreenHeight();
+
+        if (w <= 0 || h <= 0)
+            return;
+
+        if (w == _w && h == _h)
+            return;
+
+        Raylib.UnloadRenderTexture(_bobRT);
+        _bobRT = Raylib.LoadRenderTexture(w, h);
+
+        _w = w;
+        _h = h;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -21,6 +21,5 @@ project.fragment.lock.json
 .DS_Store
 
 # Demo assets (user-supplied; not committed)
-RetroDemo/Assets/music.mp3
 RetroDemo/Assets/music.ogg
 RetroDemo/Assets/music.wav

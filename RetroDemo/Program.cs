@@ -1,12 +1,13 @@
 using Raylib_cs;
 using RetroDemo.Scenes;
 
-const int ScreenWidth  = 1280;
-const int ScreenHeight = 720;
+int monitor = 0;
+int screenWidth = Raylib.GetMonitorWidth(monitor);
+int screenHeight = Raylib.GetMonitorHeight(monitor);
 
-// Enable anti-aliasing and vsync before the window is created
-Raylib.SetConfigFlags(ConfigFlags.Msaa4xHint | ConfigFlags.VSyncHint);
-Raylib.InitWindow(ScreenWidth, ScreenHeight, "RetroDemo — Amiga 500 Style Demo");
+// Enable anti-aliasing, vsync, and fullscreen before the window is created
+Raylib.SetConfigFlags(ConfigFlags.Msaa4xHint | ConfigFlags.VSyncHint | ConfigFlags.FullscreenMode);
+Raylib.InitWindow(screenWidth, screenHeight, "RetroDemo — Amiga 500 Style Demo");
 Raylib.SetTargetFPS(60);
 Raylib.InitAudioDevice();
 
@@ -39,9 +40,9 @@ foreach (string path in musicSearchPaths)
 // ── Scenes ───────────────────────────────────────────────────────────────────
 IScene[] scenes =
 [
-    new TeleprompterScene(ScreenWidth, ScreenHeight),
-    new FaceMorphScene(ScreenWidth, ScreenHeight),
-    new SinusScene(ScreenWidth, ScreenHeight),
+    new TeleprompterScene(screenWidth, screenHeight),
+    new FaceMorphScene(screenWidth, screenHeight),
+    new SinusScene(screenWidth, screenHeight),
 ];
 
 int sceneIndex = 0;

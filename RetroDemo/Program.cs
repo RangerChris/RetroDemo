@@ -1,37 +1,42 @@
 using System.Diagnostics;
-using System.Numerics;
-using System.Windows.Forms;
 using NAudio.Wave;
 using RetroDemo;
 using RetroDemo.Scenes;
 
 ApplicationConfiguration.Initialize();
 
-const int WindowWidth = 1280;
-const int WindowHeight = 720;
+const int windowWidth = 1280;
+const int windowHeight = 720;
 
-using var window = new Form
-{
-    Text = "RetroDemo — DirectX 12",
-    FormBorderStyle = FormBorderStyle.FixedSingle,
-    ClientSize = new Size(WindowWidth, WindowHeight),
-    MaximizeBox = false,
-    MinimizeBox = true,
-    TopMost = false,
-    StartPosition = FormStartPosition.CenterScreen,
-    KeyPreview = true,
-};
+using var window = new Form();
+window.Text = "RetroDemo — DirectX 12";
+window.FormBorderStyle = FormBorderStyle.FixedSingle;
+window.ClientSize = new Size(windowWidth, windowHeight);
+window.MaximizeBox = false;
+window.MinimizeBox = true;
+window.TopMost = false;
+window.StartPosition = FormStartPosition.CenterScreen;
+window.KeyPreview = true;
 
-bool shouldQuit = false;
+var shouldQuit = false;
+var skipScene = false;
 window.KeyDown += (_, e) =>
 {
     if (e.KeyCode == Keys.Escape)
+    {
         shouldQuit = true;
+        return;
+    }
+
+    if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space)
+    {
+        skipScene = true;
+    }
 };
 
 window.Show();
 
-using var renderer = new Dx12Renderer(window.Handle, WindowWidth, WindowHeight);
+using var renderer = new Dx12Renderer(window.Handle, windowWidth, windowHeight);
 
 // ── Background music (optional) ─────────────────────────────────────────────
 WaveOutEvent? musicOut = null;
@@ -49,10 +54,12 @@ string[] musicSearchPaths =
     "music.wav",
 ];
 
-foreach (string path in musicSearchPaths)
+foreach (var path in musicSearchPaths)
 {
     if (!File.Exists(path))
+    {
         continue;
+    }
 
     try
     {
@@ -74,26 +81,30 @@ foreach (string path in musicSearchPaths)
 // ── Scenes ───────────────────────────────────────────────────────────────────
 IScene[] scenes =
 [
-    new TeleprompterScene(WindowWidth, WindowHeight),
-    new FaceMorphScene(WindowWidth, WindowHeight),
-    new SinusScene(WindowWidth, WindowHeight),
+    new TeleprompterScene(windowWidth, windowHeight),
+    new SinusScene(windowWidth, windowHeight),
 ];
-int sceneIndex = 0;
+var sceneIndex = 0;
 
 var stopwatch = Stopwatch.StartNew();
-double lastTime = stopwatch.Elapsed.TotalSeconds;
+var lastTime = stopwatch.Elapsed.TotalSeconds;
 
 // ── Main loop ────────────────────────────────────────────────────────────────
 while (!shouldQuit && !window.IsDisposed)
 {
     Application.DoEvents();
 
-    double now = stopwatch.Elapsed.TotalSeconds;
-    float dt = (float)(now - lastTime);
+    var now = stopwatch.Elapsed.TotalSeconds;
+    var dt = (float)(now - lastTime);
     lastTime = now;
 
-    IScene activeScene = scenes[sceneIndex];
-    bool sceneDone = activeScene.Update(dt);
+    var activeScene = scenes[sceneIndex];
+    var sceneDone = activeScene.Update(dt);
+    if (skipScene)
+    {
+        sceneDone = true;
+        skipScene = false;
+    }
 
     if (sceneDone)
     {
@@ -106,7 +117,7 @@ while (!shouldQuit && !window.IsDisposed)
         else
         {
             activeScene.Dispose();
-            scenes[sceneIndex] = new SinusScene(WindowWidth, WindowHeight);
+            scenes[sceneIndex] = new SinusScene(windowWidth, windowHeight);
             activeScene = scenes[sceneIndex];
         }
     }
@@ -114,8 +125,10 @@ while (!shouldQuit && !window.IsDisposed)
     activeScene.Draw(renderer);
 }
 
-foreach (IScene scene in scenes)
+foreach (var scene in scenes)
+{
     scene.Dispose();
+}
 
 musicOut?.Stop();
 musicOut?.Dispose();

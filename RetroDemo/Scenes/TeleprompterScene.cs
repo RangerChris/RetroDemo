@@ -38,54 +38,17 @@ public sealed class TeleprompterScene : IScene
         switch (_phase)
         {
             case Phase.FadeIn:
-                _alpha = Math.Min(_phaseTime / FadeDuration, 1f);
-                if (_phaseTime >= FadeDuration)
-                {
-                    _phase = Phase.Typing;
-                    _phaseTime = 0f;
-                    _visibleChars = 0;
-                }
+                UpdateFadeIn();
                 break;
-
             case Phase.Typing:
-                _alpha = 1f;
-                _visibleChars = (int)(_phaseTime * TypeSpeed);
-                int maxChars = Messages[_msgIndex].Length;
-                if (_visibleChars >= maxChars)
-                {
-                    _visibleChars = maxChars;
-                    _phase = Phase.Hold;
-                    _phaseTime = 0f;
-                }
+                UpdateTyping();
                 break;
-
             case Phase.Hold:
-                _alpha = 1f;
-                if (_phaseTime >= HoldDuration)
-                {
-                    _phase = Phase.FadeOut;
-                    _phaseTime = 0f;
-                }
+                UpdateHold();
                 break;
-
             case Phase.FadeOut:
-                _alpha = 1f - Math.Min(_phaseTime / FadeDuration, 1f);
-                if (_phaseTime >= FadeDuration)
-                {
-                    _msgIndex++;
-                    if (_msgIndex >= Messages.Length)
-                    {
-                        _phase = Phase.Done;
-                    }
-                    else
-                    {
-                        _phase = Phase.FadeIn;
-                        _phaseTime = 0f;
-                        _visibleChars = 0;
-                    }
-                }
+                UpdateFadeOut();
                 break;
-
             case Phase.Done:
                 return true;
         }
@@ -95,8 +58,8 @@ public sealed class TeleprompterScene : IScene
 
     public void Draw(Dx12Renderer renderer)
     {
-        int w = renderer.Width;
-        int h = renderer.Height;
+        var w = renderer.Width;
+        var h = renderer.Height;
 
         renderer.Clear(new Vector4(0.02f, 0.02f, 0.035f, 1f));
         renderer.BeginOverlay();
@@ -106,18 +69,18 @@ public sealed class TeleprompterScene : IScene
 
         if (_phase != Phase.Done)
         {
-            string msg = Messages[_msgIndex];
-            string shown = msg[..Math.Clamp(_visibleChars, 0, msg.Length)];
+            var msg = Messages[_msgIndex];
+            var shown = msg[..Math.Clamp(_visibleChars, 0, msg.Length)];
 
-            float fontSize = Math.Max(22f, w / 24f);
+            var fontSize = Math.Max(22f, w / 24f);
             var size = renderer.MeasureText(shown, fontSize);
-            float textX = (w - size.Width) * 0.5f;
-            float textY = (h - fontSize) * 0.5f;
+            var textX = (w - size.Width) * 0.5f;
+            var textY = (h - fontSize) * 0.5f;
 
             Vector4 glow = new(1f, 0.6f, 0.2f, _alpha * 0.35f);
             Vector4 main = new(1f, 0.85f, 0.26f, _alpha);
 
-            for (int d = 4; d >= 1; d--)
+            for (var d = 4; d >= 1; d--)
             {
                 renderer.DrawText(shown, textX - d, textY + d, fontSize, glow);
                 renderer.DrawText(shown, textX + d, textY + d, fontSize, glow);
@@ -127,12 +90,12 @@ public sealed class TeleprompterScene : IScene
 
             if (_phase == Phase.Typing && ((int)(_totalTime * 2f) % 2 == 0))
             {
-                float cursorX = textX + size.Width + 6f;
+                var cursorX = textX + size.Width + 6f;
                 renderer.FillRect(cursorX, textY, fontSize * 0.45f, fontSize, main);
             }
 
-            float topLineY = textY - 20f;
-            float bottomLineY = textY + fontSize + 14f;
+            var topLineY = textY - 20f;
+            var bottomLineY = textY + fontSize + 14f;
             Vector4 lineColor = new(1f, 0.65f, 0.2f, _alpha * 0.8f);
             renderer.DrawLine(textX, topLineY, textX + size.Width, topLineY, 2f, lineColor);
             renderer.DrawLine(textX, bottomLineY, textX + size.Width, bottomLineY, 2f, lineColor);
@@ -144,11 +107,11 @@ public sealed class TeleprompterScene : IScene
 
     private void DrawCopperBars(Dx12Renderer renderer, int startY, int height, int width)
     {
-        for (int row = 0; row < height; row++)
+        for (var row = 0; row < height; row++)
         {
-            float t = _totalTime;
-            float hue = ((row * 360f / height) + t * 85f) % 360f;
-            Vector4 c = HsvToRgb(hue, 1f, 0.55f + 0.45f * MathF.Sin(row * MathF.PI / height));
+            var t = _totalTime;
+            var hue = ((row * 360f / height) + t * 85f) % 360f;
+            var c = HsvToRgb(hue, 1f, 0.55f + 0.45f * MathF.Sin(row * MathF.PI / height));
             renderer.FillRect(0, startY + row, width, 1, c);
         }
 
@@ -157,18 +120,80 @@ public sealed class TeleprompterScene : IScene
         renderer.FillRect(0, startY + height - 2, width, 2, edge);
     }
 
+    private void UpdateFadeIn()
+    {
+        _alpha = Math.Min(_phaseTime / FadeDuration, 1f);
+        if (_phaseTime < FadeDuration)
+        {
+            return;
+        }
+
+        _phase = Phase.Typing;
+        _phaseTime = 0f;
+        _visibleChars = 0;
+    }
+
+    private void UpdateTyping()
+    {
+        _alpha = 1f;
+        _visibleChars = (int)(_phaseTime * TypeSpeed);
+        var maxChars = Messages[_msgIndex].Length;
+        if (_visibleChars < maxChars)
+        {
+            return;
+        }
+
+        _visibleChars = maxChars;
+        _phase = Phase.Hold;
+        _phaseTime = 0f;
+    }
+
+    private void UpdateHold()
+    {
+        _alpha = 1f;
+        if (_phaseTime < HoldDuration)
+        {
+            return;
+        }
+
+        _phase = Phase.FadeOut;
+        _phaseTime = 0f;
+    }
+
+    private void UpdateFadeOut()
+    {
+        _alpha = 1f - Math.Min(_phaseTime / FadeDuration, 1f);
+        if (_phaseTime < FadeDuration)
+        {
+            return;
+        }
+
+        _msgIndex++;
+        if (_msgIndex >= Messages.Length)
+        {
+            _phase = Phase.Done;
+            return;
+        }
+
+        _phase = Phase.FadeIn;
+        _phaseTime = 0f;
+        _visibleChars = 0;
+    }
+
     private static void DrawScanlines(Dx12Renderer renderer, int w, int h)
     {
         Vector4 scan = new(0f, 0f, 0f, 0.23f);
-        for (int y = 0; y < h; y += 2)
+        for (var y = 0; y < h; y += 2)
+        {
             renderer.FillRect(0, y, w, 1, scan);
+        }
     }
 
     private static Vector4 HsvToRgb(float h, float s, float v)
     {
-        float c = v * s;
-        float x = c * (1 - MathF.Abs((h / 60f % 2) - 1));
-        float m = v - c;
+        var c = v * s;
+        var x = c * (1 - MathF.Abs((h / 60f % 2) - 1));
+        var m = v - c;
 
         float r = 0, g = 0, b = 0;
 

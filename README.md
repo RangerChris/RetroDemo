@@ -7,8 +7,7 @@ A classic Amiga 500 demo written in **.NET 10** using [Raylib-cs](https://github
 | # | Scene | Description |
 |---|-------|-------------|
 | 1 | **Teleprompter** | Typewriter-style messages with animated copper-bar header/footer and scanline overlay |
-| 2 | **Face Morph** | 3-D sphere-built female face that smiles then cross-fades (with chromatic-aberration glitch) into an angular robot face |
-| 3 | **Sinus Effects** | 10 classic sine-based demo effects cycling every 5 seconds, with a rainbow text scroller running at the bottom throughout |
+| 2 | **Sinus Effects** | 10 classic sine-based demo effects cycling every 5 seconds, with a rainbow text scroller running at the bottom throughout |
 
 ### The 10 sinus effects
 
@@ -54,8 +53,7 @@ RetroDemo/
 ├── Scenes/
 │   ├── IScene.cs             # Scene interface
 │   ├── TeleprompterScene.cs  # Scene 1
-│   ├── FaceMorphScene.cs     # Scene 2
-│   └── SinusScene.cs         # Scene 3
+│   └── SinusScene.cs         # Scene 2
 └── Assets/
     └── README.md             # Music file instructions
 ```

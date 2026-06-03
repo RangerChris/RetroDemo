@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using DrawingColor = System.Drawing.Color;
@@ -8,8 +7,6 @@ namespace RetroDemo;
 
 public sealed class Dx12Renderer : IDisposable
 {
-    private readonly IntPtr _hwnd;
-
     private readonly Graphics _presentGraphics;
     private readonly Bitmap _frameBuffer;
     private readonly Graphics _frameGraphics;
@@ -25,11 +22,10 @@ public sealed class Dx12Renderer : IDisposable
 
     public Dx12Renderer(IntPtr hwnd, int width, int height)
     {
-        _hwnd = hwnd;
         Width = width;
         Height = height;
 
-        _presentGraphics = Graphics.FromHwnd(_hwnd);
+        _presentGraphics = Graphics.FromHwnd(hwnd);
         _frameBuffer = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
         _frameGraphics = Graphics.FromImage(_frameBuffer);
         _frameGraphics.SmoothingMode = SmoothingMode.None;
@@ -63,16 +59,20 @@ public sealed class Dx12Renderer : IDisposable
     public void FillRect(float x, float y, float w, float h, Vector4 color)
     {
         if (_overlayGraphics is null)
+        {
             return;
+        }
 
         _sharedBrush.Color = ToColor(color);
         _overlayGraphics.FillRectangle(_sharedBrush, x, y, w, h);
     }
 
-    public void FillEllipse(float x, float y, float w, float h, Vector4 color)
+    private void FillEllipse(float x, float y, float w, float h, Vector4 color)
     {
         if (_overlayGraphics is null)
+        {
             return;
+        }
 
         _sharedBrush.Color = ToColor(color);
         _overlayGraphics.FillEllipse(_sharedBrush, x, y, w, h);
@@ -81,7 +81,9 @@ public sealed class Dx12Renderer : IDisposable
     public void DrawEllipse(float x, float y, float w, float h, float thickness, Vector4 color)
     {
         if (_overlayGraphics is null)
+        {
             return;
+        }
 
         _sharedPen.Color = ToColor(color);
         _sharedPen.Width = thickness;
@@ -96,7 +98,9 @@ public sealed class Dx12Renderer : IDisposable
     public void DrawLine(float x1, float y1, float x2, float y2, float thickness, Vector4 color)
     {
         if (_overlayGraphics is null)
+        {
             return;
+        }
 
         _sharedPen.Color = ToColor(color);
         _sharedPen.Width = thickness;
@@ -106,24 +110,28 @@ public sealed class Dx12Renderer : IDisposable
     public void DrawText(string text, float x, float y, float size, Vector4 color)
     {
         if (_overlayGraphics is null || string.IsNullOrEmpty(text))
+        {
             return;
+        }
 
-        Font font = GetFont(size);
+        var font = GetFont(size);
         _sharedBrush.Color = ToColor(color);
         _overlayGraphics.DrawString(text, font, _sharedBrush, x, y);
     }
 
     public SizeF MeasureText(string text, float size)
     {
-        Font font = GetFont(size);
+        var font = GetFont(size);
         return _frameGraphics.MeasureString(text, font, int.MaxValue, StringFormat.GenericTypographic);
     }
 
     private Font GetFont(float size)
     {
-        int key = (int)Math.Clamp(MathF.Round(size), 8f, 128f);
-        if (_fontCache.TryGetValue(key, out Font? font))
+        var key = (int)Math.Clamp(MathF.Round(size), 8f, 128f);
+        if (_fontCache.TryGetValue(key, out var font))
+        {
             return font;
+        }
 
         font = new Font("Consolas", key, FontStyle.Bold, GraphicsUnit.Pixel);
         _fontCache[key] = font;
@@ -140,8 +148,10 @@ public sealed class Dx12Renderer : IDisposable
     {
         _overlayGraphics = null;
 
-        foreach (Font font in _fontCache.Values)
+        foreach (var font in _fontCache.Values)
+        {
             font.Dispose();
+        }
 
         _sharedPen.Dispose();
         _sharedBrush.Dispose();

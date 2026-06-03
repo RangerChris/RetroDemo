@@ -85,6 +85,11 @@ public sealed class Dx12Renderer : IDisposable
             return;
         }
 
+        if (w <= 0f || h <= 0f || thickness <= 0f || float.IsNaN(w) || float.IsNaN(h) || float.IsNaN(thickness))
+        {
+            return;
+        }
+
         _sharedPen.Color = ToColor(color);
         _sharedPen.Width = thickness;
         _overlayGraphics.DrawEllipse(_sharedPen, x, y, w, h);

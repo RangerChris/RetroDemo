@@ -20,11 +20,11 @@ public sealed class SinusMultiWavesScene : SinusSceneBase
         var xStep = Math.Max(6, (int)(6f * resolutionScale));
         (float freq, float amp, float speed, float hue)[] waves =
         [
-            (0.012f, 80f, 1.1f, 10f),
-            (0.015f, 58f, 0.9f, 65f),
-            (0.02f, 42f, 1.4f, 140f),
-            (0.026f, 32f, 1.9f, 210f),
-            (0.034f, 24f, 2.2f, 285f),
+            (0.012f, 80f, 0.6f, 10f),
+            (0.015f, 58f, -1.1f, 65f),
+            (0.02f, 42f, 1.8f, 140f),
+            (0.026f, 32f, -2.6f, 210f),
+            (0.034f, 24f, 3.4f, 285f),
         ];
 
         foreach (var (freq, amp, speed, hue0) in waves)

@@ -82,7 +82,16 @@ foreach (var path in musicSearchPaths)
 IScene[] scenes =
 [
     new TeleprompterScene(windowWidth, windowHeight),
-    new SinusScene(windowWidth, windowHeight),
+    new SinusMultiWavesScene(windowWidth, windowHeight),
+    new SinusPlasmaScene(windowWidth, windowHeight),
+    new SinusCopperBarsScene(windowWidth, windowHeight),
+    new SinusStarfieldScene(windowWidth, windowHeight),
+    new SinusBobsScene(windowWidth, windowHeight),
+    new SinusLandscapeScene(windowWidth, windowHeight),
+    new SinusLissajousScene(windowWidth, windowHeight),
+    new SinusTunnelScene(windowWidth, windowHeight),
+    new SinusInterferenceScene(windowWidth, windowHeight),
+    new SinusDotRotatorScene(windowWidth, windowHeight),
 ];
 var sceneIndex = 0;
 
@@ -108,7 +117,6 @@ while (!shouldQuit && !window.IsDisposed)
 
     if (sceneDone)
     {
-        // Loop the final sinus scene forever; earlier scenes advance once.
         if (sceneIndex < scenes.Length - 1)
         {
             sceneIndex++;
@@ -116,8 +124,23 @@ while (!shouldQuit && !window.IsDisposed)
         }
         else
         {
-            activeScene.Dispose();
-            scenes[sceneIndex] = new SinusScene(windowWidth, windowHeight);
+            for (var i = 1; i < scenes.Length; i++)
+            {
+                scenes[i].Dispose();
+            }
+
+            scenes[1] = new SinusMultiWavesScene(windowWidth, windowHeight);
+            scenes[2] = new SinusPlasmaScene(windowWidth, windowHeight);
+            scenes[3] = new SinusCopperBarsScene(windowWidth, windowHeight);
+            scenes[4] = new SinusStarfieldScene(windowWidth, windowHeight);
+            scenes[5] = new SinusBobsScene(windowWidth, windowHeight);
+            scenes[6] = new SinusLandscapeScene(windowWidth, windowHeight);
+            scenes[7] = new SinusLissajousScene(windowWidth, windowHeight);
+            scenes[8] = new SinusTunnelScene(windowWidth, windowHeight);
+            scenes[9] = new SinusInterferenceScene(windowWidth, windowHeight);
+            scenes[10] = new SinusDotRotatorScene(windowWidth, windowHeight);
+
+            sceneIndex = 1;
             activeScene = scenes[sceneIndex];
         }
     }

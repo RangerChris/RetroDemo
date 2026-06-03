@@ -7,9 +7,18 @@ A classic Amiga 500 demo written in **.NET 10** using [Raylib-cs](https://github
 | # | Scene | Description |
 |---|-------|-------------|
 | 1 | **Teleprompter** | Typewriter-style messages with animated copper-bar header/footer and scanline overlay |
-| 2 | **Sinus Effects** | 10 classic sine-based demo effects cycling every 5 seconds, with a rainbow text scroller running at the bottom throughout |
+| 2 | **Sinus: Multi-waves** | Classic multi-layer sine waves with a rainbow scroller |
+| 3 | **Sinus: Plasma** | Classic plasma (320×200 retro resolution, pixel-perfect upscale) |
+| 4 | **Sinus: Copper Bars** | Animated copper bars with scanlines |
+| 5 | **Sinus: Starfield** | Perspective star field with sine wobble |
+| 6 | **Sinus: Bouncing Bobs** | Additive-blended glow bobs |
+| 7 | **Sinus: Landscape** | 3‑D sine landscape (wireframe) |
+| 8 | **Sinus: Lissajous** | Lissajous curves with fading trail |
+| 9 | **Sinus: Tunnel** | Fisheye tunnel with sine wobble |
+| 10 | **Sinus: Interference** | Interference rings (moiré) |
+| 11 | **Sinus: Dot Rotator** | Sine-displaced point cloud / torus rotator |
 
-### The 10 sinus effects
+### The 10 sinus effects (now individual scenes)
 
 1. Multi-layer sine waves
 2. Classic plasma (320×200 retro resolution, pixel-perfect upscale)
@@ -53,7 +62,8 @@ RetroDemo/
 ├── Scenes/
 │   ├── IScene.cs             # Scene interface
 │   ├── TeleprompterScene.cs  # Scene 1
-│   └── SinusScene.cs         # Scene 2
+│   ├── SinusSceneBase.cs     # Shared sinus scene base
+│   └── Sinus*Scene.cs        # Sinus effect scenes (one per effect)
 └── Assets/
     └── README.md             # Music file instructions
 ```
